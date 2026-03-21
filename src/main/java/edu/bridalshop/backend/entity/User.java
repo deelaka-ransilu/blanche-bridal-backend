@@ -31,7 +31,9 @@ public class User {
     private String passwordHash;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "role", nullable = false, columnDefinition = "user_role")
+    @Column(name = "role", nullable = false)
+    @org.hibernate.annotations.JdbcType(
+            org.hibernate.dialect.PostgreSQLEnumJdbcType.class)
     @Builder.Default
     private UserRole role = UserRole.CUSTOMER;
 
