@@ -16,6 +16,8 @@ import org.springframework.web.bind.annotation.*;
 import edu.bridalshop.backend.dto.request.ForgotPasswordRequest;
 import edu.bridalshop.backend.dto.request.ResetPasswordRequest;
 
+import edu.bridalshop.backend.dto.request.GoogleAuthRequest;
+
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
@@ -79,4 +81,12 @@ public class AuthController {
             @Valid @RequestBody ResetPasswordRequest request) {
         return ResponseEntity.ok(authService.resetPassword(request));
     }
+
+    // POST /api/auth/google
+    @PostMapping("/google")
+    public ResponseEntity<AuthResponse> googleLogin(
+            @Valid @RequestBody GoogleAuthRequest request) {
+        return ResponseEntity.ok(authService.googleLogin(request));
+    }
+
 }

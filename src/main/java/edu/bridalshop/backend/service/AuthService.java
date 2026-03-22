@@ -30,6 +30,9 @@ import edu.bridalshop.backend.dto.request.ResetPasswordRequest;
 import edu.bridalshop.backend.security.TokenService;
 import io.jsonwebtoken.Claims;
 
+import edu.bridalshop.backend.dto.request.GoogleAuthRequest;
+import edu.bridalshop.backend.security.GoogleTokenVerifier;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -46,6 +49,8 @@ public class AuthService {
     private final PayloadSanitizer           sanitizer;
     private final TokenService  tokenService;
     private final EmailService  emailService;
+
+    private final GoogleTokenVerifier googleTokenVerifier;
 
     @Value("${jwt.refresh-expiration}")
     private long refreshExpirationMs;
@@ -260,5 +265,68 @@ public class AuthService {
         refreshTokenRepository.revokeAllUserTokens(user.getUserId());
 
         return new MessageResponse("Password reset successfully. Please log in.");
+    }
+
+    // ── Google Login ───────────────────────────────────────────────────
+    @Transactional
+    public AuthResponse googleLogin(GoogleAuthRequest req) {
+
+        // 1. Verify token with Google — get user info
+        GoogleTokenVerifier.GoogleUserInfo googleUser =
+                googleTokenVerifier.verify(req.getIdToken());
+
+        // 2. Try to find existing user by google_id first
+        User user = userRepository.findByGoogleId(googleUser.googleId)
+                .orElseGet(() -> {
+
+                    // 3. Not found by googleId — check if email exists
+                    return userRepository.findByEmail(googleUser.email)
+                            .map(existingUser -> {
+                                // Email exists (registered with password before)
+                                // Link Google account to existing user
+                                existingUser.setGoogleId(googleUser.googleId);
+                                existingUser.setEmailVerified(true);
+                                if (existingUser.getProfilePicture() == null) {
+                                    existingUser.setProfilePicture(
+                                            googleUser.pictureUrl);
+                                }
+                                return userRepository.save(existingUser);
+                            })
+                            .orElseGet(() -> {
+                                // 4. Brand new user — create account
+                                User newUser = User.builder()
+                                        .publicId(publicIdGenerator.forUser())
+                                        .fullName(googleUser.fullName)
+                                        .email(googleUser.email)
+                                        .googleId(googleUser.googleId)
+                                        .profilePicture(googleUser.pictureUrl)
+                                        .role(UserRole.CUSTOMER)
+                                        .emailVerified(true)  // Google verified it
+                                        .profileCompleted(false)
+                                        .isActive(true)
+                                        .build();
+                                userRepository.save(newUser);
+
+                                // Create customer profile
+                                CustomerProfile profile = CustomerProfile.builder()
+                                        .user(newUser)
+                                        .build();
+                                customerProfileRepository.save(profile);
+
+                                return newUser;
+                            });
+                });
+
+        // 5. Check account is active
+        if (!Boolean.TRUE.equals(user.getIsActive())) {
+            throw new InvalidCredentialsException("Account is disabled");
+        }
+
+        // 6. Generate your JWT tokens — same as regular login
+        CustomUserDetails userDetails = new CustomUserDetails(user);
+        String accessToken  = jwtService.generateAccessToken(userDetails);
+        String refreshToken = generateAndSaveRefreshToken(user);
+
+        return buildAuthResponse(user, accessToken, refreshToken);
     }
 }
