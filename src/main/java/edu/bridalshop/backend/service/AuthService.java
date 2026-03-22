@@ -25,6 +25,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import edu.bridalshop.backend.dto.request.ForgotPasswordRequest;
+import edu.bridalshop.backend.dto.request.ResetPasswordRequest;
+import edu.bridalshop.backend.security.TokenService;
+import io.jsonwebtoken.Claims;
+
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -39,6 +44,8 @@ public class AuthService {
     private final JwtService                 jwtService;
     private final PublicIdGenerator          publicIdGenerator;
     private final PayloadSanitizer           sanitizer;
+    private final TokenService  tokenService;
+    private final EmailService  emailService;
 
     @Value("${jwt.refresh-expiration}")
     private long refreshExpirationMs;
@@ -77,7 +84,11 @@ public class AuthService {
                 .build();
         customerProfileRepository.save(profile);
 
-        // 5. TODO: send verification email (next step)
+        // 5. Send verification email
+        String token = tokenService.generateEmailVerificationToken(
+                user.getUserId(), user.getEmail());
+        emailService.sendVerificationEmail(
+                user.getEmail(), user.getFullName(), token);
 
         return new MessageResponse(
                 "Registration successful. Please check your email to verify your account.");
@@ -178,5 +189,76 @@ public class AuthService {
                 .emailVerified(user.getEmailVerified())
                 .profileCompleted(user.getProfileCompleted())
                 .build();
+    }
+
+    // ── Send verification email ────────────────────────────────────────
+    @Transactional
+    public MessageResponse resendVerificationEmail(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("User not found"));
+
+        if (Boolean.TRUE.equals(user.getEmailVerified())) {
+            return new MessageResponse("Email is already verified");
+        }
+
+        String token = tokenService
+                .generateEmailVerificationToken(user.getUserId(), user.getEmail());
+        emailService.sendVerificationEmail(
+                user.getEmail(), user.getFullName(), token);
+
+        return new MessageResponse("Verification email sent");
+    }
+
+    // ── Verify email ───────────────────────────────────────────────────
+    @Transactional
+    public MessageResponse verifyEmail(String token) {
+        Claims claims = tokenService.verifyToken(token, "EMAIL_VERIFY");
+
+        String email = claims.getSubject();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("User not found"));
+
+        user.setEmailVerified(true);
+        userRepository.save(user);
+
+        return new MessageResponse("Email verified successfully");
+    }
+
+    // ── Forgot password ────────────────────────────────────────────────
+    @Transactional
+    public MessageResponse forgotPassword(ForgotPasswordRequest req) {
+        req.setEmail(sanitizer.sanitizeEmail(req.getEmail()));
+
+        // Always return success — never reveal if email exists
+        userRepository.findByEmail(req.getEmail()).ifPresent(user -> {
+            String token = tokenService.generatePasswordResetToken(
+                    user.getUserId(), user.getEmail());
+            emailService.sendPasswordResetEmail(
+                    user.getEmail(), user.getFullName(), token);
+        });
+
+        return new MessageResponse(
+                "If that email exists, a reset link has been sent");
+    }
+
+    // ── Reset password ─────────────────────────────────────────────────
+    @Transactional
+    public MessageResponse resetPassword(ResetPasswordRequest req) {
+        Claims claims = tokenService.verifyToken(req.getToken(), "PASSWORD_RESET");
+
+        String email = claims.getSubject();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() ->
+                        new ResourceNotFoundException("User not found"));
+
+        user.setPasswordHash(passwordEncoder.encode(req.getNewPassword()));
+        userRepository.save(user);
+
+        // Revoke all refresh tokens — force re-login
+        refreshTokenRepository.revokeAllUserTokens(user.getUserId());
+
+        return new MessageResponse("Password reset successfully. Please log in.");
     }
 }

@@ -13,6 +13,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import edu.bridalshop.backend.dto.request.ForgotPasswordRequest;
+import edu.bridalshop.backend.dto.request.ResetPasswordRequest;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -48,5 +50,33 @@ public class AuthController {
     public ResponseEntity<MessageResponse> logout(
             @AuthenticationPrincipal CustomUserDetails userDetails) {
         return ResponseEntity.ok(authService.logout(userDetails.getUserId()));
+    }
+
+    // POST /api/auth/verify-email
+    @PostMapping("/verify-email")
+    public ResponseEntity<MessageResponse> verifyEmail(
+            @RequestParam String token) {
+        return ResponseEntity.ok(authService.verifyEmail(token));
+    }
+
+    // POST /api/auth/resend-verification
+    @PostMapping("/resend-verification")
+    public ResponseEntity<MessageResponse> resendVerification(
+            @RequestParam String email) {
+        return ResponseEntity.ok(authService.resendVerificationEmail(email));
+    }
+
+    // POST /api/auth/forgot-password
+    @PostMapping("/forgot-password")
+    public ResponseEntity<MessageResponse> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request) {
+        return ResponseEntity.ok(authService.forgotPassword(request));
+    }
+
+    // POST /api/auth/reset-password
+    @PostMapping("/reset-password")
+    public ResponseEntity<MessageResponse> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request) {
+        return ResponseEntity.ok(authService.resetPassword(request));
     }
 }
