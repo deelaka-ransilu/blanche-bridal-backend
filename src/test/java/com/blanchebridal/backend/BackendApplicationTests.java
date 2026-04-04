@@ -1,10 +1,10 @@
-package com.bridalboutique;
+package com.blanchebridal.backend;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class BridalBoutiqueApplicationTests {
+class BackendApplicationTests {
 
 	@Test
 	void contextLoads() {

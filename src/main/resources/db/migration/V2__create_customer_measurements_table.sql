@@ -1,0 +1,33 @@
+CREATE TABLE customer_measurements (
+            id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            public_id              VARCHAR(20) UNIQUE NOT NULL,
+            customer_id            UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            recorded_by            UUID NOT NULL REFERENCES users(id),
+            notes                  TEXT,
+            measured_at            TIMESTAMP NOT NULL,
+            created_at             TIMESTAMP NOT NULL DEFAULT NOW(),
+            updated_at             TIMESTAMP NOT NULL DEFAULT NOW(),
+            height_with_shoes      DECIMAL(5,2),
+            hollow_to_hem          DECIMAL(5,2),
+            full_bust              DECIMAL(5,2),
+            under_bust             DECIMAL(5,2),
+            natural_waist          DECIMAL(5,2),
+            full_hip               DECIMAL(5,2),
+            shoulder_width         DECIMAL(5,2),
+            torso_length           DECIMAL(5,2),
+            thigh_circumference    DECIMAL(5,2),
+            waist_to_knee          DECIMAL(5,2),
+            waist_to_floor         DECIMAL(5,2),
+            armhole                DECIMAL(5,2),
+            bicep_circumference    DECIMAL(5,2),
+            elbow_circumference    DECIMAL(5,2),
+            wrist_circumference    DECIMAL(5,2),
+            sleeve_length          DECIMAL(5,2),
+            upper_bust             DECIMAL(5,2),
+            bust_apex_distance     DECIMAL(5,2),
+            shoulder_to_bust_point DECIMAL(5,2),
+            neck_circumference     DECIMAL(5,2),
+            train_length           DECIMAL(5,2)
+);
+
+CREATE SEQUENCE measurement_seq START 1;
