@@ -1,5 +1,9 @@
 package com.blanchebridal.backend.auth;
 
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
+import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.gson.GsonFactory;
 import com.blanchebridal.backend.auth.dto.res.AuthResponse;
 import com.blanchebridal.backend.auth.dto.req.GoogleAuthRequest;
 import com.blanchebridal.backend.auth.dto.req.LoginRequest;
@@ -10,8 +14,11 @@ import com.blanchebridal.backend.user.User;
 import com.blanchebridal.backend.user.UserRepository;
 import com.blanchebridal.backend.user.UserRole;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
+import java.util.Collections;
 
 @Service
 @RequiredArgsConstructor
@@ -20,6 +27,9 @@ public class AuthServiceImpl implements AuthService {
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
+
+    @Value("${google.client-id}")
+    private String googleClientId;
 
     @Override
     public AuthResponse register(RegisterRequest request) {
@@ -62,7 +72,52 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public AuthResponse googleAuth(GoogleAuthRequest request) {
-        // Google OAuth will be implemented in B10
-        throw new UnsupportedOperationException("Google auth not yet implemented");
+        try {
+            GoogleIdTokenVerifier verifier = new GoogleIdTokenVerifier.Builder(
+                    new NetHttpTransport(), GsonFactory.getDefaultInstance())
+                    .setAudience(Collections.singletonList(googleClientId))
+                    .build();
+
+            GoogleIdToken idToken = verifier.verify(request.googleToken());
+            if (idToken == null) {
+                throw new UnauthorizedException("Invalid Google token");
+            }
+
+            GoogleIdToken.Payload payload = idToken.getPayload();
+            String email    = payload.getEmail();
+            String googleId = payload.getSubject();
+            String firstName = (String) payload.get("given_name");
+            String lastName  = (String) payload.get("family_name");
+
+            // Find existing user or create new CUSTOMER
+            User user = userRepository.findByEmail(email).orElseGet(() ->
+                    userRepository.save(User.builder()
+                            .email(email)
+                            .googleId(googleId)
+                            .firstName(firstName != null ? firstName : "")
+                            .lastName(lastName  != null ? lastName  : "")
+                            .role(UserRole.CUSTOMER)
+                            .isActive(true)
+                            .build())
+            );
+
+            // Link googleId if user registered via email first
+            if (user.getGoogleId() == null) {
+                user.setGoogleId(googleId);
+                userRepository.save(user);
+            }
+
+            if (!user.getIsActive()) {
+                throw new UnauthorizedException("Account is deactivated");
+            }
+
+            String token = jwtUtil.generateToken(user);
+            return new AuthResponse(token, user.getRole().name());
+
+        } catch (UnauthorizedException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new UnauthorizedException("Google authentication failed");
+        }
     }
 }
