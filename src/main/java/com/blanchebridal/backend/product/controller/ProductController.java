@@ -16,6 +16,11 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import com.blanchebridal.backend.auth.JwtUtil;
+import com.blanchebridal.backend.exception.UnauthorizedException;
+import com.blanchebridal.backend.product.dto.req.CreateReviewRequest;
+import com.blanchebridal.backend.product.dto.res.ReviewResponse;
+import com.blanchebridal.backend.product.service.ReviewService;
 
 import java.math.BigDecimal;
 import java.util.Map;
@@ -27,6 +32,8 @@ import java.util.UUID;
 public class ProductController {
 
     private final ProductService productService;
+    private final ReviewService reviewService;
+    private final JwtUtil jwtUtil;
 
     // Public
     @GetMapping
@@ -117,5 +124,33 @@ public class ProductController {
             @RequestParam int quantity) {
         return ResponseEntity.ok(Map.of("success", true,
                 "data", productService.updateStock(id, quantity)));
+    }
+
+    // Public — approved reviews for a product
+    @GetMapping("/{id}/reviews")
+    public ResponseEntity<Map<String, Object>> getReviews(@PathVariable UUID id) {
+        return ResponseEntity.ok(Map.of("success", true,
+                "data", reviewService.getApprovedReviews(id)));
+    }
+
+    // Customer only — submit a review
+    @PostMapping("/{id}/reviews")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<Map<String, Object>> submitReview(
+            @PathVariable UUID id,
+            @RequestHeader("Authorization") String authHeader,
+            @Valid @RequestBody CreateReviewRequest request) {
+        UUID userId = extractUserId(authHeader);
+        return ResponseEntity.ok(Map.of("success", true,
+                "data", reviewService.submitReview(id, userId, request)));
+    }
+
+    // ─── Add private helper at the bottom of ProductController ────────────────
+    private UUID extractUserId(String authHeader) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw new UnauthorizedException("Missing or invalid Authorization header");
+        }
+        return UUID.fromString(jwtUtil.extractUserId(authHeader.substring(7)));
     }
 }
