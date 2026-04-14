@@ -10,6 +10,18 @@ spring:
   flyway:
     enabled: true
 
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ransilu.deelaka@gmail.com
+    password: olzr sxgr gqkz swxv
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
 server:
   port: 8080
 
@@ -22,3 +34,6 @@ springdoc:
 
 jwt:
   expiration: 86400000
+
+app:
+  frontend-url: http://localhost:3000
