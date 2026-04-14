@@ -153,4 +153,15 @@ public class ProductController {
         }
         return UUID.fromString(jwtUtil.extractUserId(authHeader.substring(7)));
     }
+
+    // Admin only — remove a single image from a product
+    @DeleteMapping("/{id}/images/{imageId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @SecurityRequirement(name = "bearerAuth")
+    public ResponseEntity<Map<String, Object>> deleteImage(
+            @PathVariable UUID id,
+            @PathVariable UUID imageId) {
+        productService.deleteProductImage(id, imageId);
+        return ResponseEntity.ok(Map.of("success", true, "data", "Image removed"));
+    }
 }

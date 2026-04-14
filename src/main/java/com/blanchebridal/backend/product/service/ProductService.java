@@ -18,4 +18,5 @@ public interface ProductService {
     ProductDetailResponse updateProduct(UUID id, UpdateProductRequest request);
     void deleteProduct(UUID id);
     ProductDetailResponse updateStock(UUID id, int quantity);
+    void deleteProductImage(UUID productId, UUID imageId);
 }

@@ -2,6 +2,7 @@ package com.blanchebridal.backend.product.service.impl;
 
 import com.blanchebridal.backend.exception.ConflictException;
 import com.blanchebridal.backend.exception.ResourceNotFoundException;
+import com.blanchebridal.backend.product.repository.ProductImageRepository;
 import com.blanchebridal.backend.product.spec.ProductSpecification;
 import com.blanchebridal.backend.product.dto.*;
 import com.blanchebridal.backend.product.dto.req.CreateProductRequest;
@@ -36,6 +37,8 @@ public class ProductServiceImpl implements ProductService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final ObjectMapper objectMapper;
+    // Add this mock field alongside the others
+    private final  ProductImageRepository productImageRepository;
 
     @Override
     public Page<ProductSummaryResponse> getProducts(ProductFilters filters, Pageable pageable) {
@@ -134,6 +137,22 @@ public class ProductServiceImpl implements ProductService {
         Product product = findById(id);
         product.setStock(quantity);
         return toDetail(productRepository.save(product));
+    }
+
+    @Override
+    @Transactional
+    public void deleteProductImage(UUID productId, UUID imageId) {
+        findById(productId); // verify product exists
+
+        ProductImage image = productImageRepository.findById(imageId)
+                .orElseThrow(() -> new ResourceNotFoundException("Image not found: " + imageId));
+
+        // Guard: make sure the image actually belongs to this product
+        if (!image.getProduct().getId().equals(productId)) {
+            throw new ResourceNotFoundException("Image not found on this product");
+        }
+
+        productImageRepository.delete(image);
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────

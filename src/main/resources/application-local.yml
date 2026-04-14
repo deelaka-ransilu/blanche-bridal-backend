@@ -1,0 +1,17 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/blanche_bridal
+    username: postgres
+    password: root
+
+jwt:
+  secret: 13863c9ba8d94582af3fe7720f575cc861d047dc3eb37ada9ee6ffeea3bf83ba4293bbdf846afc721de73442cd70475eab62a89d70f43f84f58ec80d52af9803
+
+google:
+  client-id: 233183932744-i9muvd53f16uat3gktrfa1pv8g17env0.apps.googleusercontent.com
+
+cloudinary:
+  cloud-name: dctbdkkrk
+  api-key: 133536451147831
+  api-secret: cb8Mp3pfKgQJRGqTAvCUszjkZ4U
+  folder: bridal-shop

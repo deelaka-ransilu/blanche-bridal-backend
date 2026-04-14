@@ -23,11 +23,16 @@ public class ProductSpecification {
             if (filters.available() != null) {
                 predicates.add(cb.equal(root.get("isAvailable"), filters.available()));
             }
-            if (filters.minPrice() != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("purchasePrice"), filters.minPrice()));
-            }
-            if (filters.maxPrice() != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("purchasePrice"), filters.maxPrice()));
+            if (filters.minPrice() != null || filters.maxPrice() != null) {
+                jakarta.persistence.criteria.Expression<java.math.BigDecimal> effectivePrice =
+                        cb.coalesce(root.get("rentalPrice"), root.get("purchasePrice"));
+
+                if (filters.minPrice() != null) {
+                    predicates.add(cb.greaterThanOrEqualTo(effectivePrice, filters.minPrice()));
+                }
+                if (filters.maxPrice() != null) {
+                    predicates.add(cb.lessThanOrEqualTo(effectivePrice, filters.maxPrice()));
+                }
             }
             if (filters.search() != null && !filters.search().isBlank()) {
                 String pattern = "%" + filters.search().toLowerCase() + "%";

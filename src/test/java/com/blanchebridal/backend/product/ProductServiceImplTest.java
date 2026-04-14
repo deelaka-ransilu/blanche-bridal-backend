@@ -12,6 +12,7 @@ import com.blanchebridal.backend.product.entity.Product;
 import com.blanchebridal.backend.product.entity.ProductImage;
 import com.blanchebridal.backend.product.entity.ProductType;
 import com.blanchebridal.backend.product.repository.CategoryRepository;
+import com.blanchebridal.backend.product.repository.ProductImageRepository;
 import com.blanchebridal.backend.product.repository.ProductRepository;
 import com.blanchebridal.backend.product.service.impl.ProductServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -19,6 +20,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -46,8 +48,11 @@ class ProductServiceImplTest {
     @Mock
     private CategoryRepository categoryRepository;
 
+    @Mock
+    private ProductImageRepository productImageRepository;
+
     // ObjectMapper is NOT mocked — we use the real one so JSON serialization works
-    private ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @InjectMocks
     private ProductServiceImpl productService;
@@ -63,7 +68,7 @@ class ProductServiceImplTest {
     void setUp() {
         // Inject the real ObjectMapper manually since @InjectMocks won't pick it up
         // without a Spring context
-        productService = new ProductServiceImpl(productRepository, categoryRepository, objectMapper);
+        productService = new ProductServiceImpl(productRepository, categoryRepository, objectMapper, productImageRepository);
 
         categoryId   = UUID.randomUUID();
         dressId      = UUID.randomUUID();
@@ -121,14 +126,14 @@ class ProductServiceImplTest {
         Page<Product> fakePage = new PageImpl<>(List.of(dress, accessory), pageable, 2);
 
         // any(Specification.class) — we don't care which spec, just return our fake page
-        when(productRepository.findAll(any(Specification.class), any(Pageable.class)))
+        when(productRepository.findAll(ArgumentMatchers.<Specification<Product>>any(), any(Pageable.class)))
                 .thenReturn(fakePage);
 
         ProductFilters filters = new ProductFilters(null, null, null, null, null, null);
         Page<ProductSummaryResponse> result = productService.getProducts(filters, pageable);
 
         assertThat(result.getTotalElements()).isEqualTo(2);
-        assertThat(result.getContent().get(0).name()).isEqualTo("Lace Wedding Dress");
+        assertThat(result.getContent().getFirst().name()).isEqualTo("Lace Wedding Dress");
         assertThat(result.getContent().get(1).name()).isEqualTo("Pearl Tiara");
     }
 
@@ -138,14 +143,14 @@ class ProductServiceImplTest {
         Pageable pageable = PageRequest.of(0, 20);
         Page<Product> fakePage = new PageImpl<>(List.of(dress), pageable, 1);
 
-        when(productRepository.findAll(any(Specification.class), any(Pageable.class)))
+        when(productRepository.findAll(ArgumentMatchers.<Specification<Product>>any(), any(Pageable.class)))
                 .thenReturn(fakePage);
 
         ProductFilters filters = new ProductFilters(ProductType.DRESS, null, null, null, null, null);
         Page<ProductSummaryResponse> result = productService.getProducts(filters, pageable);
 
         assertThat(result.getTotalElements()).isEqualTo(1);
-        assertThat(result.getContent().get(0).type()).isEqualTo(ProductType.DRESS);
+        assertThat(result.getContent().getFirst().type()).isEqualTo(ProductType.DRESS);
     }
 
     @Test
@@ -154,13 +159,13 @@ class ProductServiceImplTest {
         Pageable pageable = PageRequest.of(0, 20);
         Page<Product> emptyPage = new PageImpl<>(List.of(), pageable, 0);
 
-        when(productRepository.findAll(any(Specification.class), any(Pageable.class)))
+        when(productRepository.findAll(ArgumentMatchers.<Specification<Product>>any(), any(Pageable.class)))
                 .thenReturn(emptyPage);
 
         ProductFilters filters = new ProductFilters(null, null, "nonexistent", null, null, null);
         Page<ProductSummaryResponse> result = productService.getProducts(filters, pageable);
 
-        assertThat(result.getTotalElements()).isEqualTo(0);
+        assertThat(result.getTotalElements()).isZero();
         assertThat(result.getContent()).isEmpty();
     }
 
@@ -416,7 +421,7 @@ class ProductServiceImplTest {
 
         ProductDetailResponse result = productService.updateStock(dressId, 0);
 
-        assertThat(result.stock()).isEqualTo(0);
+        assertThat(result.stock()).isZero();
     }
 
     @Test
@@ -427,5 +432,80 @@ class ProductServiceImplTest {
 
         assertThatThrownBy(() -> productService.updateStock(unknownId, 5))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+// DELETE PRODUCT IMAGE
+// ═════════════════════════════════════════════════════════════════════════
+
+    @Test
+    @DisplayName("deleteProductImage: success — removes image that belongs to the product")
+    void deleteProductImage_success() {
+        UUID imageId = UUID.randomUUID();
+        ProductImage image = ProductImage.builder()
+                .id(imageId)
+                .product(dress)
+                .url("https://cloudinary.com/img1.jpg")
+                .displayOrder(0)
+                .build();
+
+        when(productRepository.findById(dressId)).thenReturn(Optional.of(dress));
+        when(productImageRepository.findById(imageId)).thenReturn(Optional.of(image));
+
+        productService.deleteProductImage(dressId, imageId);
+
+        verify(productImageRepository, times(1)).delete(image);
+    }
+
+    @Test
+    @DisplayName("deleteProductImage: fail — unknown productId throws ResourceNotFoundException")
+    void deleteProductImage_productNotFound_throwsException() {
+        UUID unknownProductId = UUID.randomUUID();
+        UUID imageId = UUID.randomUUID();
+        when(productRepository.findById(unknownProductId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> productService.deleteProductImage(unknownProductId, imageId))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Product not found");
+
+        verify(productImageRepository, never()).findById(any());
+        verify(productImageRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("deleteProductImage: fail — unknown imageId throws ResourceNotFoundException")
+    void deleteProductImage_imageNotFound_throwsException() {
+        UUID unknownImageId = UUID.randomUUID();
+        when(productRepository.findById(dressId)).thenReturn(Optional.of(dress));
+        when(productImageRepository.findById(unknownImageId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> productService.deleteProductImage(dressId, unknownImageId))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Image not found");
+
+        verify(productImageRepository, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("deleteProductImage: fail — image belongs to a different product throws ResourceNotFoundException")
+    void deleteProductImage_imageBelongsToDifferentProduct_throwsException() {
+        UUID imageId = UUID.randomUUID();
+
+        // This image is attached to `accessory`, not `dress`
+        ProductImage image = ProductImage.builder()
+                .id(imageId)
+                .product(accessory)
+                .url("https://cloudinary.com/other.jpg")
+                .displayOrder(0)
+                .build();
+
+        when(productRepository.findById(dressId)).thenReturn(Optional.of(dress));
+        when(productImageRepository.findById(imageId)).thenReturn(Optional.of(image));
+
+        assertThatThrownBy(() -> productService.deleteProductImage(dressId, imageId))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Image not found on this product");
+
+        verify(productImageRepository, never()).delete(any());
     }
 }
