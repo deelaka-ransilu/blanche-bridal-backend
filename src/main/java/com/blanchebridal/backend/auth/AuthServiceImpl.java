@@ -1,4 +1,3 @@
-// AuthServiceImpl.java — replace entire file
 package com.blanchebridal.backend.auth;
 
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;

@@ -1,19 +1,14 @@
 package com.blanchebridal.backend.auth;
 
 import com.blanchebridal.backend.auth.dto.res.AuthResponse;
-import com.blanchebridal.backend.auth.dto.req.GoogleAuthRequest;
-import com.blanchebridal.backend.auth.dto.req.LoginRequest;
-import com.blanchebridal.backend.auth.dto.req.RegisterRequest;
+import com.blanchebridal.backend.auth.dto.req.*;
 import com.blanchebridal.backend.user.UserRepository;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 
@@ -29,19 +24,14 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
 
     @PostMapping("/register")
-    public ResponseEntity<Map<String, Object>> register
-            (
-                    @Valid @RequestBody RegisterRequest request
-            )
-    {
-        AuthResponse response = authService.register(request);
-        return ResponseEntity.ok(
-                Map.of(
-                        "success",
-                        true,
-                        "data",
-                        response)
-        );
+    public ResponseEntity<Map<String, Object>> register(
+            @Valid @RequestBody RegisterRequest request) {
+        authService.register(request);
+        // Don't return a token — user must verify email first
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Registration successful. Please check your email to verify your account."
+        ));
     }
 
     @PostMapping("/login")
@@ -55,13 +45,62 @@ public class AuthController {
     public ResponseEntity<Map<String, Object>> googleAuth(
             @Valid @RequestBody GoogleAuthRequest request) {
         AuthResponse response = authService.googleAuth(request);
+
+        // New Google user — needs to verify email
+        if (response.token() == null) {
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "Please check your email to verify your account."
+            ));
+        }
+
         return ResponseEntity.ok(Map.of("success", true, "data", response));
+    }
+
+    @GetMapping("/verify")
+    public ResponseEntity<Map<String, Object>> verifyEmail(
+            @RequestParam String token) {
+        authService.verifyEmail(token);
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Email verified successfully. You can now log in."
+        ));
+    }
+
+    @PostMapping("/resend-verification")
+    public ResponseEntity<Map<String, Object>> resendVerification(
+            @Valid @RequestBody ResendVerificationRequest request) {
+        authService.resendVerification(request.email());
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Verification email sent. Please check your inbox."
+        ));
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<Map<String, Object>> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request) {
+        authService.forgotPassword(request.email());
+        // Always return success — never reveal if email exists
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "If an account exists with that email, a reset link has been sent."
+        ));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<Map<String, Object>> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request) {
+        authService.resetPassword(request.token(), request.newPassword());
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "message", "Password reset successfully. You can now log in."
+        ));
     }
 
     @PostMapping("/setup-superadmin")
     public ResponseEntity<Map<String, Object>> setupSuperadmin(
             @Valid @RequestBody RegisterRequest request) {
-
         if (userRepository.existsByEmail(request.email())) {
             throw new com.blanchebridal.backend.exception.ConflictException("Superadmin already exists");
         }
@@ -73,7 +112,7 @@ public class AuthController {
                 .lastName(request.lastName())
                 .phone(request.phone())
                 .role(com.blanchebridal.backend.user.UserRole.SUPERADMIN)
-                .isActive(true)
+                .isActive(true) // superadmin bypasses email verification
                 .build();
 
         userRepository.save(user);
