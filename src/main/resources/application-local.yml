@@ -15,3 +15,8 @@ cloudinary:
   api-key: 133536451147831
   api-secret: cb8Mp3pfKgQJRGqTAvCUszjkZ4U
   folder: bridal-shop
+
+payhere:
+  merchant-id: 1235177
+  secret: MjQzODIyOTI3MDIzNzAyNTQzODMzNjYxMDEyMTg3MTMwNTg5NDUx
+  notify-url: https://YOUR_NGROK_URL.ngrok.io/api/payments/notify
