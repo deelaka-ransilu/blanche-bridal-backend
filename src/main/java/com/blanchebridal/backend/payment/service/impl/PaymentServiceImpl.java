@@ -12,6 +12,7 @@ import com.blanchebridal.backend.payment.entity.PaymentMethod;
 import com.blanchebridal.backend.payment.entity.PaymentStatus;
 import com.blanchebridal.backend.payment.repository.PaymentRepository;
 import com.blanchebridal.backend.payment.service.PaymentService;
+import com.blanchebridal.backend.payment.service.ReceiptService;
 import com.blanchebridal.backend.payment.util.PayHereUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +32,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepository;
     private final OrderRepository orderRepository;
     private final PayHereUtil payHereUtil;
+    private final ReceiptService receiptService;
 
     @Value("${payhere.merchant-id}")
     private String merchantId;
@@ -151,9 +153,7 @@ public class PaymentServiceImpl implements PaymentService {
 
             log.info("Payment completed for order {}. PayHere payment ID: {}",
                     orderId, payherePaymentId);
-
-            // Receipt generation will be wired here in B3_4
-            // receiptService.generateReceipt(order, payment);
+             receiptService.generateReceipt(order, payment);
 
         }, () -> log.warn("Webhook received for unknown payhereOrderId: {}", orderId));
     }
