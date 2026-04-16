@@ -63,6 +63,18 @@ public class GlobalExceptionHandler {
         return buildError("INTERNAL_ERROR", "Something went wrong", HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalState(IllegalStateException ex) {
+        return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "error", Map.of(
+                        "code", "BUSINESS_RULE_VIOLATION",
+                        "message", ex.getMessage(),
+                        "status", 400
+                )
+        ));
+    }
+
     private ResponseEntity<Map<String, Object>> buildError(
             String code, String message, HttpStatus status) {
 
