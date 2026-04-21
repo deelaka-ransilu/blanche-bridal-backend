@@ -103,8 +103,8 @@ public class PaymentServiceImpl implements PaymentService {
                 .customerFirstName(firstName)
                 .customerLastName(lastName)
                 .customerEmail(order.getUser().getEmail())
-                .returnUrl(returnUrl)
-                .cancelUrl(cancelUrl)
+                .returnUrl(returnUrl)      // ← needs return-url in yml
+                .cancelUrl(cancelUrl)      // ← needs cancel-url in yml
                 .notifyUrl(notifyUrl)
                 .build();
     }

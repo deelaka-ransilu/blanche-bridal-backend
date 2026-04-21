@@ -3,12 +3,15 @@ spring:
     url: jdbc:postgresql://localhost:5432/blanche_bridal
     username: postgres
     password: root
+  mail:
+    username: blanchebridal.noreply@gmail.com
+    password: wucw tdvr ehoa mgvq
 
 jwt:
   secret: 13863c9ba8d94582af3fe7720f575cc861d047dc3eb37ada9ee6ffeea3bf83ba4293bbdf846afc721de73442cd70475eab62a89d70f43f84f58ec80d52af9803
 
 google:
-  client-id: 233183932744-i9muvd53f16uat3gktrfa1pv8g17env0.apps.googleusercontent.com
+  client-id: 552850447326-4o7kksei8nih0o5ojvt2376c6tmci0ug.apps.googleusercontent.com
 
 cloudinary:
   cloud-name: dctbdkkrk
@@ -18,5 +21,11 @@ cloudinary:
 
 payhere:
   merchant-id: 1235177
-  secret: MjQzODIyOTI3MDIzNzAyNTQzODMzNjYxMDEyMTg3MTMwNTg5NDUx
-  notify-url: https://YOUR_NGROK_URL.ngrok.io/api/payments/notify
+  secret: MjQ1MDI5NzUwOTExMTk0MDQxMzMxNjMxNzM3ODMwMTgyOTk1OTA0NQ==
+  sandbox: true
+  return-url: http://localhost:3000/checkout/success
+  cancel-url: http://localhost:3000/checkout/cancel
+  notify-url: http://localhost:8080/api/payments/notify
+
+app:
+  frontend-url: http://localhost:3000

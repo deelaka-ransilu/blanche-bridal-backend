@@ -2,6 +2,7 @@ package com.blanchebridal.backend.payment.controller;
 
 import com.blanchebridal.backend.payment.dto.res.ReceiptResponse;
 import com.blanchebridal.backend.payment.service.ReceiptService;
+import com.blanchebridal.backend.user.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -9,7 +10,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -27,9 +27,9 @@ public class ReceiptController {
     @GetMapping("/my")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<Map<String, Object>> getMyReceipts(
-            @AuthenticationPrincipal UserDetails userDetails) {
+            @AuthenticationPrincipal User user) {
 
-        UUID userId = UUID.fromString(userDetails.getUsername());
+        UUID userId = user.getId();
         List<ReceiptResponse> receipts = receiptService.getMyReceipts(userId);
         return ResponseEntity.ok(Map.of("success", true, "data", receipts));
     }
@@ -60,11 +60,10 @@ public class ReceiptController {
     @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE', 'SUPERADMIN')")
     public ResponseEntity<Map<String, Object>> getReceiptPdfUrl(
             @PathVariable UUID id,
-            @AuthenticationPrincipal UserDetails userDetails) {
+            @AuthenticationPrincipal User user) {
 
-        UUID requestingUserId = UUID.fromString(userDetails.getUsername());
-        String role = userDetails.getAuthorities().iterator().next()
-                .getAuthority().replace("ROLE_", "");
+        UUID requestingUserId = user.getId();
+        String role = user.getRole().name();
 
         String pdfUrl = receiptService.getReceiptPdfUrl(id, requestingUserId, role);
         return ResponseEntity.ok(Map.of("success", true,
