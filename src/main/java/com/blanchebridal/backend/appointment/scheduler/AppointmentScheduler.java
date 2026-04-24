@@ -3,7 +3,7 @@ package com.blanchebridal.backend.appointment.scheduler;
 import com.blanchebridal.backend.appointment.entity.Appointment;
 import com.blanchebridal.backend.appointment.entity.AppointmentStatus;
 import com.blanchebridal.backend.appointment.repository.AppointmentRepository;
-import com.blanchebridal.backend.auth.service.EmailService;
+import com.blanchebridal.backend.shared.email.EmailService;
 import com.blanchebridal.backend.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

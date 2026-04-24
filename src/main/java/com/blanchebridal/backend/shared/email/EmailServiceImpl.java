@@ -1,6 +1,5 @@
-package com.blanchebridal.backend.auth.service.impl;
+package com.blanchebridal.backend.shared.email;
 
-import com.blanchebridal.backend.auth.service.EmailService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.SimpleMailMessage;

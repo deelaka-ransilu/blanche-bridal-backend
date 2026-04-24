@@ -1,6 +1,6 @@
 package com.blanchebridal.backend.order.service.impl;
 
-import com.blanchebridal.backend.auth.service.EmailService;
+import com.blanchebridal.backend.shared.email.EmailService;
 import com.blanchebridal.backend.exception.ResourceNotFoundException;
 import com.blanchebridal.backend.exception.UnauthorizedException;
 import com.blanchebridal.backend.order.dto.req.CreateOrderRequest;

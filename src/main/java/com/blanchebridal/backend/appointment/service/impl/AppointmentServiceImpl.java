@@ -10,7 +10,7 @@ import com.blanchebridal.backend.appointment.repository.AppointmentRepository;
 import com.blanchebridal.backend.appointment.repository.TimeSlotConfigRepository;
 import com.blanchebridal.backend.appointment.service.AppointmentService;
 import com.blanchebridal.backend.appointment.service.GoogleCalendarService;
-import com.blanchebridal.backend.auth.service.EmailService;
+import com.blanchebridal.backend.shared.email.EmailService;
 import com.blanchebridal.backend.exception.ResourceNotFoundException;
 import com.blanchebridal.backend.exception.UnauthorizedException;
 import com.blanchebridal.backend.product.entity.Product;

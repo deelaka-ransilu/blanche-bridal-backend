@@ -1,4 +1,4 @@
-package com.blanchebridal.backend.auth.service;
+package com.blanchebridal.backend.shared.email;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;

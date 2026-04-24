@@ -5,7 +5,7 @@ import com.blanchebridal.backend.auth.entity.VerificationToken;
 import com.blanchebridal.backend.auth.repository.VerificationTokenRepository;
 import com.blanchebridal.backend.auth.entity.VerificationTokenType;
 import com.blanchebridal.backend.auth.service.AuthService;
-import com.blanchebridal.backend.auth.service.EmailService;
+import com.blanchebridal.backend.shared.email.EmailService;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
 import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
 import com.google.api.client.http.javanet.NetHttpTransport;
