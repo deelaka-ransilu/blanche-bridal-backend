@@ -1,0 +1,26 @@
+package com.blanchebridal.backend.auth.service;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.List;
+
+public interface EmailService {
+    void sendVerificationEmail(String toEmail, String token);
+    void sendPasswordResetEmail(String toEmail, String token);
+
+    void sendOrderConfirmationEmail(String toEmail, String customerName,
+                                    String orderId, BigDecimal totalAmount,
+                                    List<String> itemSummaries);
+
+    void sendAppointmentConfirmationEmail(String toEmail, String customerName,
+                                          LocalDate appointmentDate, String timeSlot,
+                                          String appointmentType, String productName);
+
+    void sendAppointmentReminderEmail(String toEmail, String customerName,
+                                      LocalDate appointmentDate, String timeSlot,
+                                      String appointmentType);
+
+    void sendRentalOverdueEmail(String toEmail, String customerName,
+                                String productName, LocalDate rentalEnd,
+                                BigDecimal balanceDue);
+}
