@@ -1,14 +1,18 @@
 package com.blanchebridal.backend.product.controller;
 
-import com.blanchebridal.backend.product.service.ProductService;
-import com.blanchebridal.backend.product.entity.ProductType;
-import com.blanchebridal.backend.product.dto.*;
+import com.blanchebridal.backend.auth.security.JwtUtil;
+import com.blanchebridal.backend.exception.UnauthorizedException;
+import com.blanchebridal.backend.product.dto.ProductFilters;
 import com.blanchebridal.backend.product.dto.req.CreateProductRequest;
+import com.blanchebridal.backend.product.dto.req.CreateReviewRequest;
 import com.blanchebridal.backend.product.dto.req.UpdateProductRequest;
 import com.blanchebridal.backend.product.dto.res.ProductSummaryResponse;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import com.blanchebridal.backend.product.entity.ProductType;
+import com.blanchebridal.backend.product.service.ProductService;
+import com.blanchebridal.backend.product.service.ReviewService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -16,15 +20,12 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-import com.blanchebridal.backend.auth.security.JwtUtil;
-import com.blanchebridal.backend.exception.UnauthorizedException;
-import com.blanchebridal.backend.product.dto.req.CreateReviewRequest;
-import com.blanchebridal.backend.product.service.ReviewService;
 
 import java.math.BigDecimal;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/products")
 @RequiredArgsConstructor
@@ -87,9 +88,11 @@ public class ProductController {
     // Admin only
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> create(
             @Valid @RequestBody CreateProductRequest request) {
+
+        log.info("[Product] Create request — name: {}, type: {}",
+                request.name(), request.type());
         return ResponseEntity.ok(Map.of("success", true,
                 "data", productService.createProduct(request)));
     }
@@ -97,10 +100,11 @@ public class ProductController {
     // Admin only
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> update(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateProductRequest request) {
+
+        log.info("[Product] Update request — id: {}", id);
         return ResponseEntity.ok(Map.of("success", true,
                 "data", productService.updateProduct(id, request)));
     }
@@ -108,8 +112,8 @@ public class ProductController {
     // Admin only
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> delete(@PathVariable UUID id) {
+        log.info("[Product] Delete request — id: {}", id);
         productService.deleteProduct(id);
         return ResponseEntity.ok(Map.of("success", true, "data", "Product deleted"));
     }
@@ -117,10 +121,11 @@ public class ProductController {
     // Admin only
     @PutMapping("/{id}/stock")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> updateStock(
             @PathVariable UUID id,
             @RequestParam int quantity) {
+
+        log.info("[Product] Stock update — id: {}, new quantity: {}", id, quantity);
         return ResponseEntity.ok(Map.of("success", true,
                 "data", productService.updateStock(id, quantity)));
     }
@@ -135,32 +140,36 @@ public class ProductController {
     // Customer only — submit a review
     @PostMapping("/{id}/reviews")
     @PreAuthorize("hasRole('CUSTOMER')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> submitReview(
             @PathVariable UUID id,
             @RequestHeader("Authorization") String authHeader,
             @Valid @RequestBody CreateReviewRequest request) {
+
         UUID userId = extractUserId(authHeader);
+        log.info("[Product] Review submitted — product: {}, user: {}, rating: {}",
+                id, userId, request.rating());
         return ResponseEntity.ok(Map.of("success", true,
                 "data", reviewService.submitReview(id, userId, request)));
-    }
-
-    // ─── Add private helper at the bottom of ProductController ────────────────
-    private UUID extractUserId(String authHeader) {
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            throw new UnauthorizedException("Missing or invalid Authorization header");
-        }
-        return UUID.fromString(jwtUtil.extractUserId(authHeader.substring(7)));
     }
 
     // Admin only — remove a single image from a product
     @DeleteMapping("/{id}/images/{imageId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> deleteImage(
             @PathVariable UUID id,
             @PathVariable UUID imageId) {
+
+        log.info("[Product] Image delete — product: {}, image: {}", id, imageId);
         productService.deleteProductImage(id, imageId);
         return ResponseEntity.ok(Map.of("success", true, "data", "Image removed"));
+    }
+
+    // ─── Helper ───────────────────────────────────────────────────────────────
+
+    private UUID extractUserId(String authHeader) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw new UnauthorizedException("Missing or invalid Authorization header");
+        }
+        return UUID.fromString(jwtUtil.extractUserId(authHeader.substring(7)));
     }
 }

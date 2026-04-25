@@ -4,6 +4,7 @@ import com.blanchebridal.backend.payment.dto.res.ReceiptResponse;
 import com.blanchebridal.backend.payment.service.ReceiptService;
 import com.blanchebridal.backend.user.entity.User;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -16,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/receipts")
 @RequiredArgsConstructor
@@ -64,7 +66,8 @@ public class ReceiptController {
 
         UUID requestingUserId = user.getId();
         String role = user.getRole().name();
-
+        log.info("[Receipt] PDF access — receipt: {}, user: {}, role: {}",
+                id, requestingUserId, role);
         String pdfUrl = receiptService.getReceiptPdfUrl(id, requestingUserId, role);
         return ResponseEntity.ok(Map.of("success", true,
                 "data", Map.of("pdfUrl", pdfUrl)));

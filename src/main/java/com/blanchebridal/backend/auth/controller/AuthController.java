@@ -7,7 +7,6 @@ import com.blanchebridal.backend.auth.service.AuthService;
 import com.blanchebridal.backend.user.entity.User;
 import com.blanchebridal.backend.user.entity.UserRole;
 import com.blanchebridal.backend.user.repository.UserRepository;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -19,7 +18,6 @@ import java.util.Map;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@SecurityRequirement(name = "bearerAuth")
 public class AuthController {
 
     private final AuthService authService;

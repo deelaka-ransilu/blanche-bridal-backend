@@ -1,11 +1,11 @@
 package com.blanchebridal.backend.user.controller;
 
-import com.blanchebridal.backend.user.service.AdminService;
 import com.blanchebridal.backend.user.dto.req.CreateUserRequest;
 import com.blanchebridal.backend.user.dto.res.UserResponse;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import com.blanchebridal.backend.user.service.AdminService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -14,11 +14,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
 @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
-@SecurityRequirement(name = "bearerAuth")
 public class AdminController {
 
     private final AdminService adminService;
@@ -34,6 +34,8 @@ public class AdminController {
     @PostMapping("/employees")
     public ResponseEntity<Map<String, Object>> createEmployee(
             @Valid @RequestBody CreateUserRequest request) {
+
+        log.info("[Admin] Create employee — email: {}", request.email());
         UserResponse employee = adminService.createEmployee(request);
         return ResponseEntity.ok(Map.of("success", true, "data", employee));
     }
@@ -42,13 +44,18 @@ public class AdminController {
     @PutMapping("/employees/{employeeId}/deactivate")
     public ResponseEntity<Map<String, Object>> deactivateEmployee(
             @PathVariable UUID employeeId) {
+
+        log.info("[Admin] Deactivate employee — id: {}", employeeId);
         UserResponse employee = adminService.deactivateEmployee(employeeId);
         return ResponseEntity.ok(Map.of("success", true, "data", employee));
     }
 
+    // PUT /api/admin/employees/{employeeId}/activate
     @PutMapping("/employees/{employeeId}/activate")
     public ResponseEntity<Map<String, Object>> activateEmployee(
             @PathVariable UUID employeeId) {
+
+        log.info("[Admin] Activate employee — id: {}", employeeId);
         UserResponse employee = adminService.activateEmployee(employeeId);
         return ResponseEntity.ok(Map.of("success", true, "data", employee));
     }
@@ -64,6 +71,7 @@ public class AdminController {
     @GetMapping("/customers/{customerId}")
     public ResponseEntity<Map<String, Object>> getCustomer(
             @PathVariable UUID customerId) {
+
         UserResponse customer = adminService.getCustomer(customerId);
         return ResponseEntity.ok(Map.of("success", true, "data", customer));
     }

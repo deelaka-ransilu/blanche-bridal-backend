@@ -7,6 +7,7 @@ import com.blanchebridal.backend.inquiry.entity.InquiryStatus;
 import com.blanchebridal.backend.inquiry.service.InquiryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/inquiries")
 @RequiredArgsConstructor
@@ -27,6 +29,7 @@ public class InquiryController {
     // PUBLIC — guests can submit without a token
     @PostMapping
     public ResponseEntity<?> submit(@Valid @RequestBody CreateInquiryRequest req) {
+        log.info("[Inquiry] Submission from {} <{}>", req.getName(), req.getEmail());
         InquiryResponse response = inquiryService.submitInquiry(req);
         return ResponseEntity.ok(Map.of("success", true, "data", response));
     }
@@ -56,7 +59,8 @@ public class InquiryController {
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','SUPERADMIN','EMPLOYEE')")
     public ResponseEntity<?> getById(@PathVariable UUID id) {
-        return ResponseEntity.ok(Map.of("success", true, "data", inquiryService.getInquiryById(id)));
+        return ResponseEntity.ok(Map.of("success", true,
+                "data", inquiryService.getInquiryById(id)));
     }
 
     @PutMapping("/{id}/status")
@@ -64,6 +68,9 @@ public class InquiryController {
     public ResponseEntity<?> updateStatus(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateInquiryStatusRequest req) {
+
+        log.info("[Inquiry] Status update request — inquiry: {}, new status: {}",
+                id, req.getStatus());
         return ResponseEntity.ok(Map.of("success", true,
                 "data", inquiryService.updateStatus(id, req.getStatus())));
     }

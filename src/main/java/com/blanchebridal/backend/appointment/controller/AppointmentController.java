@@ -6,9 +6,9 @@ import com.blanchebridal.backend.appointment.entity.AppointmentStatus;
 import com.blanchebridal.backend.appointment.service.AppointmentService;
 import com.blanchebridal.backend.auth.security.JwtUtil;
 import com.blanchebridal.backend.exception.UnauthorizedException;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -24,6 +24,7 @@ import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/appointments")
 @RequiredArgsConstructor
@@ -46,7 +47,6 @@ public class AppointmentController {
     // ADMIN + EMPLOYEE — all appointments
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> getAllAppointments(
             @RequestParam(required = false) AppointmentStatus status,
             @RequestParam(defaultValue = "0") int page,
@@ -71,7 +71,6 @@ public class AppointmentController {
     // CUSTOMER — own appointments
     @GetMapping("/my")
     @PreAuthorize("hasRole('CUSTOMER')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> getMyAppointments(
             @RequestHeader("Authorization") String authHeader,
             @RequestParam(defaultValue = "0") int page,
@@ -97,7 +96,6 @@ public class AppointmentController {
     // ALL AUTH — appointment detail
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> getAppointmentById(
             @PathVariable UUID id,
             @RequestHeader("Authorization") String authHeader) {
@@ -113,12 +111,13 @@ public class AppointmentController {
     // CUSTOMER — book appointment
     @PostMapping
     @PreAuthorize("hasRole('CUSTOMER')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> bookAppointment(
             @RequestHeader("Authorization") String authHeader,
             @Valid @RequestBody CreateAppointmentRequest request) {
 
         UUID userId = extractUserId(authHeader);
+        log.info("[Appointment] Booking request — user: {}, date: {}, slot: {}, type: {}",
+                userId, request.getAppointmentDate(), request.getTimeSlot(), request.getType());
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "data", appointmentService.bookAppointment(request, userId)
@@ -128,10 +127,10 @@ public class AppointmentController {
     // ADMIN — confirm + Google Calendar sync
     @PutMapping("/{id}/confirm")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> confirmAppointment(
             @PathVariable UUID id) {
 
+        log.info("[Appointment] Confirming appointment {}", id);
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "data", appointmentService.confirmAppointment(id)
@@ -141,13 +140,14 @@ public class AppointmentController {
     // ALL AUTH — cancel (customer = own only, admin = any)
     @PutMapping("/{id}/cancel")
     @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> cancelAppointment(
             @PathVariable UUID id,
             @RequestHeader("Authorization") String authHeader) {
 
         UUID userId = extractUserId(authHeader);
         String role = extractRole();
+        log.info("[Appointment] Cancel request — appointment: {}, requester: {}, role: {}",
+                id, userId, role);
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "data", appointmentService.cancelAppointment(id, userId, role)
@@ -157,7 +157,6 @@ public class AppointmentController {
     // CUSTOMER — reschedule own appointment
     @PutMapping("/{id}/reschedule")
     @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'SUPERADMIN')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> rescheduleAppointment(
             @PathVariable UUID id,
             @RequestHeader("Authorization") String authHeader,
@@ -165,6 +164,8 @@ public class AppointmentController {
 
         UUID userId = extractUserId(authHeader);
         String role = extractRole();
+        log.info("[Appointment] Reschedule request — appointment: {}, new date: {}, slot: {}",
+                id, request.getAppointmentDate(), request.getTimeSlot());
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "data", appointmentService.rescheduleAppointment(id, request, userId, role)
@@ -174,10 +175,10 @@ public class AppointmentController {
     // ADMIN + EMPLOYEE — mark completed
     @PutMapping("/{id}/complete")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> completeAppointment(
             @PathVariable UUID id) {
 
+        log.info("[Appointment] Completing appointment {}", id);
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "data", appointmentService.completeAppointment(id)

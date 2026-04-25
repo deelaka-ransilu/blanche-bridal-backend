@@ -7,9 +7,9 @@ import com.blanchebridal.backend.rental.dto.req.MarkReturnedRequest;
 import com.blanchebridal.backend.rental.dto.req.UpdateBalanceRequest;
 import com.blanchebridal.backend.rental.entity.RentalStatus;
 import com.blanchebridal.backend.rental.service.RentalService;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/rentals")
 @RequiredArgsConstructor
@@ -34,7 +35,6 @@ public class RentalController {
     // ADMIN + EMPLOYEE — all rentals, optional status filter
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> getAllRentals(
             @RequestParam(required = false) RentalStatus status,
             @RequestParam(defaultValue = "0") int page,
@@ -59,7 +59,6 @@ public class RentalController {
     // CUSTOMER — own rentals only
     @GetMapping("/my")
     @PreAuthorize("hasRole('CUSTOMER')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> getMyRentals(
             @RequestHeader("Authorization") String authHeader) {
 
@@ -73,7 +72,6 @@ public class RentalController {
     // CUSTOMER (own) + ADMIN + EMPLOYEE
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> getRentalById(
             @PathVariable UUID id,
             @RequestHeader("Authorization") String authHeader) {
@@ -89,10 +87,12 @@ public class RentalController {
     // ADMIN + EMPLOYEE — create rental on behalf of customer
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> createRental(
             @Valid @RequestBody CreateRentalRequest request) {
 
+        log.info("[Rental] Create request — product: {}, user: {}, start: {}, end: {}",
+                request.getProductId(), request.getUserId(),
+                request.getRentalStart(), request.getRentalEnd());
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "data", rentalService.createRental(request)
@@ -102,11 +102,12 @@ public class RentalController {
     // ADMIN + EMPLOYEE — mark as returned
     @PutMapping("/{id}/return")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> markReturned(
             @PathVariable UUID id,
             @Valid @RequestBody MarkReturnedRequest request) {
 
+        log.info("[Rental] Mark returned — rental: {}, return date: {}",
+                id, request.getReturnDate());
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "data", rentalService.markReturned(id, request.getReturnDate())
@@ -116,11 +117,12 @@ public class RentalController {
     // ADMIN only — update balance due
     @PutMapping("/{id}/balance")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> updateBalance(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateBalanceRequest request) {
 
+        log.info("[Rental] Balance update — rental: {}, new balance: {}",
+                id, request.getBalanceDue());
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "data", rentalService.updateBalance(id, request)

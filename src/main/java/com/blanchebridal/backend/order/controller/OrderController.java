@@ -6,9 +6,9 @@ import com.blanchebridal.backend.order.dto.req.CreateOrderRequest;
 import com.blanchebridal.backend.order.dto.req.UpdateOrderStatusRequest;
 import com.blanchebridal.backend.order.entity.OrderStatus;
 import com.blanchebridal.backend.order.service.OrderService;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/orders")
 @RequiredArgsConstructor
@@ -33,7 +34,6 @@ public class OrderController {
     // ADMIN + EMPLOYEE — all orders with optional status filter
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> getAllOrders(
             @RequestParam(required = false) OrderStatus status,
             @RequestParam(defaultValue = "0") int page,
@@ -58,7 +58,6 @@ public class OrderController {
     // CUSTOMER — own orders only
     @GetMapping("/my")
     @PreAuthorize("hasRole('CUSTOMER')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> getMyOrders(
             @RequestHeader("Authorization") String authHeader,
             @RequestParam(defaultValue = "0") int page,
@@ -84,7 +83,6 @@ public class OrderController {
     // CUSTOMER (own order only) + ADMIN + EMPLOYEE
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> getOrderById(
             @PathVariable UUID id,
             @RequestHeader("Authorization") String authHeader) {
@@ -98,12 +96,13 @@ public class OrderController {
     // CUSTOMER — create an order
     @PostMapping
     @PreAuthorize("hasRole('CUSTOMER')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> createOrder(
             @RequestHeader("Authorization") String authHeader,
             @Valid @RequestBody CreateOrderRequest request) {
 
         UUID userId = extractUserId(authHeader);
+        log.info("[Order] Create request — user: {}, items: {}",
+                userId, request.getItems() != null ? request.getItems().size() : 0);
         return ResponseEntity.ok(Map.of("success", true,
                 "data", orderService.createOrder(request, userId)));
     }
@@ -111,11 +110,12 @@ public class OrderController {
     // ADMIN — update order status
     @PutMapping("/{id}/status")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
-    @SecurityRequirement(name = "bearerAuth")
     public ResponseEntity<Map<String, Object>> updateOrderStatus(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateOrderStatusRequest request) {
 
+        log.info("[Order] Status update request — order: {}, new status: {}",
+                id, request.getStatus());
         return ResponseEntity.ok(Map.of("success", true,
                 "data", orderService.updateOrderStatus(id, request.getStatus())));
     }
