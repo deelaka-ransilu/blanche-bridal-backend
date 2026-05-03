@@ -113,9 +113,9 @@ public class ProductController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     public ResponseEntity<Map<String, Object>> delete(@PathVariable UUID id) {
-        log.info("[Product] Delete request — id: {}", id);
+        log.info("[Product] Deactivate request — id: {}", id);
         productService.deleteProduct(id);
-        return ResponseEntity.ok(Map.of("success", true, "data", "Product deleted"));
+        return ResponseEntity.ok(Map.of("success", true, "data", "Product deactivated"));
     }
 
     // Admin only

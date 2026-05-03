@@ -33,4 +33,4 @@ build/
 .vscode/
 
 ### Environment & Secrets ###
-src/main/resources/application-local.yml
+application-local.yml

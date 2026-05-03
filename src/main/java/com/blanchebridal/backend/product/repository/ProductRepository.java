@@ -12,7 +12,9 @@ import java.util.UUID;
 public interface ProductRepository extends JpaRepository<Product, UUID>,
         JpaSpecificationExecutor<Product> {
 
-    Optional<Product> findBySlug(String slug);
+    Optional<Product> findBySlugAndIsActiveTrue(String slug);
+    Optional<Product> findByIdAndIsActiveTrue(UUID id);
+    Page<Product> findAllByIsActiveTrue(Pageable pageable);
     boolean existsBySlug(String slug);
     Page<Product> findByCategoryId(UUID categoryId, Pageable pageable);
 }

@@ -23,7 +23,7 @@ public class CategoryServiceImpl implements CategoryService {
 
     @Override
     public List<CategoryResponse> getAllCategories() {
-        return categoryRepository.findAll()
+        return categoryRepository.findAllByIsActiveTrue()
                 .stream()
                 .map(this::toResponse)
                 .toList();
@@ -84,14 +84,15 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     @Transactional
     public void deleteCategory(UUID id) {
-        findById(id); // verify exists
-        categoryRepository.deleteById(id);
+        Category category = findById(id);
+        category.setIsActive(false);
+        categoryRepository.save(category);
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private Category findById(UUID id) {
-        return categoryRepository.findById(id)
+        return categoryRepository.findByIdAndIsActiveTrue(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + id));
     }
 
@@ -100,8 +101,8 @@ public class CategoryServiceImpl implements CategoryService {
                 c.getId(),
                 c.getName(),
                 c.getSlug(),
-                c.getParent() != null ? c.getParent().getId() : null,
-                c.getParent() != null ? c.getParent().getName() : null,
+                c.getParent() != null && Boolean.TRUE.equals(c.getParent().getIsActive()) ? c.getParent().getId() : null,
+                c.getParent() != null && Boolean.TRUE.equals(c.getParent().getIsActive()) ? c.getParent().getName() : null,
                 c.getCreatedAt()
         );
     }

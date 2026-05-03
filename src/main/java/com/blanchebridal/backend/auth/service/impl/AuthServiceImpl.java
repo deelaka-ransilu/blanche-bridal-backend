@@ -247,7 +247,7 @@ public class AuthServiceImpl implements AuthService {
                 .user(user)
                 .token(tokenString)
                 .type(VerificationTokenType.EMAIL_VERIFY)
-                .expiresAt(LocalDateTime.now().plusMinutes(5))
+                .expiresAt(LocalDateTime.now().plusMinutes(20))
                 .build();
 
         tokenRepository.save(vToken);

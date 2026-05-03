@@ -78,6 +78,7 @@ class ProductServiceImplTest {
                 .id(categoryId)
                 .name("Bridal Gowns")
                 .slug("bridal-gowns")
+                .isActive(true)
                 .createdAt(LocalDateTime.now())
                 .build();
 
@@ -94,6 +95,7 @@ class ProductServiceImplTest {
                 .sizes("[\"S\",\"M\",\"L\"]")
                 .images(new ArrayList<>())
                 .isAvailable(true)
+                .isActive(true)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -110,6 +112,7 @@ class ProductServiceImplTest {
                 .sizes("[]")
                 .images(new ArrayList<>())
                 .isAvailable(true)
+                .isActive(true)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -176,7 +179,7 @@ class ProductServiceImplTest {
     @Test
     @DisplayName("getProductById: success — returns full product detail")
     void getProductById_success() {
-        when(productRepository.findById(dressId)).thenReturn(Optional.of(dress));
+        when(productRepository.findByIdAndIsActiveTrue(dressId)).thenReturn(Optional.of(dress));
 
         ProductDetailResponse result = productService.getProductById(dressId);
 
@@ -191,7 +194,7 @@ class ProductServiceImplTest {
     @DisplayName("getProductById: fail — unknown id throws ResourceNotFoundException")
     void getProductById_notFound_throwsException() {
         UUID unknownId = UUID.randomUUID();
-        when(productRepository.findById(unknownId)).thenReturn(Optional.empty());
+        when(productRepository.findByIdAndIsActiveTrue(unknownId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> productService.getProductById(unknownId))
                 .isInstanceOf(ResourceNotFoundException.class)
@@ -205,7 +208,7 @@ class ProductServiceImplTest {
     @Test
     @DisplayName("getProductBySlug: success — returns product matching slug")
     void getProductBySlug_success() {
-        when(productRepository.findBySlug("lace-wedding-dress"))
+        when(productRepository.findBySlugAndIsActiveTrue("lace-wedding-dress"))
                 .thenReturn(Optional.of(dress));
 
         ProductDetailResponse result = productService.getProductBySlug("lace-wedding-dress");
@@ -217,7 +220,7 @@ class ProductServiceImplTest {
     @Test
     @DisplayName("getProductBySlug: fail — unknown slug throws ResourceNotFoundException")
     void getProductBySlug_notFound_throwsException() {
-        when(productRepository.findBySlug("unknown-slug")).thenReturn(Optional.empty());
+        when(productRepository.findBySlugAndIsActiveTrue("unknown-slug")).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> productService.getProductBySlug("unknown-slug"))
                 .isInstanceOf(ResourceNotFoundException.class)
@@ -232,7 +235,7 @@ class ProductServiceImplTest {
     @DisplayName("createProduct: success — creates product with images and category")
     void createProduct_success() {
         when(productRepository.existsBySlug("lace-wedding-dress")).thenReturn(false);
-        when(categoryRepository.findById(categoryId)).thenReturn(Optional.of(category));
+        when(categoryRepository.findByIdAndIsActiveTrue(categoryId)).thenReturn(Optional.of(category));
         when(productRepository.save(any(Product.class))).thenReturn(dress);
 
         CreateProductRequest request = new CreateProductRequest(
@@ -277,7 +280,7 @@ class ProductServiceImplTest {
         assertThat(result.name()).isEqualTo("Pearl Tiara");
         assertThat(result.category()).isNull();
         // categoryRepository.findById should NEVER be called when categoryId is null
-        verify(categoryRepository, never()).findById(any());
+        verify(categoryRepository, never()).findByIdAndIsActiveTrue(any());
     }
 
     @Test
@@ -300,7 +303,7 @@ class ProductServiceImplTest {
     void createProduct_invalidCategory_throwsException() {
         UUID unknownCategoryId = UUID.randomUUID();
         when(productRepository.existsBySlug(any())).thenReturn(false);
-        when(categoryRepository.findById(unknownCategoryId)).thenReturn(Optional.empty());
+        when(categoryRepository.findByIdAndIsActiveTrue(unknownCategoryId)).thenReturn(Optional.empty());
 
         CreateProductRequest request = new CreateProductRequest(
                 "New Dress", null, ProductType.DRESS,
@@ -319,7 +322,7 @@ class ProductServiceImplTest {
     @Test
     @DisplayName("updateProduct: success — updates name, price, and stock")
     void updateProduct_success() {
-        when(productRepository.findById(dressId)).thenReturn(Optional.of(dress));
+        when(productRepository.findByIdAndIsActiveTrue(dressId)).thenReturn(Optional.of(dress));
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
 
         UpdateProductRequest request = new UpdateProductRequest(
@@ -343,7 +346,7 @@ class ProductServiceImplTest {
                 .id(UUID.randomUUID()).url("https://old.jpg").displayOrder(0).build();
         dress.getImages().add(existingImage);
 
-        when(productRepository.findById(dressId)).thenReturn(Optional.of(dress));
+        when(productRepository.findByIdAndIsActiveTrue(dressId)).thenReturn(Optional.of(dress));
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
 
         UpdateProductRequest request = new UpdateProductRequest(
@@ -363,7 +366,7 @@ class ProductServiceImplTest {
     @DisplayName("updateProduct: fail — unknown id throws ResourceNotFoundException")
     void updateProduct_notFound_throwsException() {
         UUID unknownId = UUID.randomUUID();
-        when(productRepository.findById(unknownId)).thenReturn(Optional.empty());
+        when(productRepository.findByIdAndIsActiveTrue(unknownId)).thenReturn(Optional.empty());
 
         UpdateProductRequest request = new UpdateProductRequest(
                 "X", null, null, null, null, null, null, null, null, null);
@@ -377,25 +380,27 @@ class ProductServiceImplTest {
     // ═════════════════════════════════════════════════════════════════════════
 
     @Test
-    @DisplayName("deleteProduct: success — calls deleteById on repository")
+    @DisplayName("deleteProduct: success — marks product inactive")
     void deleteProduct_success() {
-        when(productRepository.findById(dressId)).thenReturn(Optional.of(dress));
+        when(productRepository.findByIdAndIsActiveTrue(dressId)).thenReturn(Optional.of(dress));
+        when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
 
         productService.deleteProduct(dressId);
 
-        verify(productRepository, times(1)).deleteById(dressId);
+        verify(productRepository, times(1)).save(any(Product.class));
+        assertThat(dress.getIsActive()).isFalse();
     }
 
     @Test
     @DisplayName("deleteProduct: fail — unknown id throws ResourceNotFoundException")
     void deleteProduct_notFound_throwsException() {
         UUID unknownId = UUID.randomUUID();
-        when(productRepository.findById(unknownId)).thenReturn(Optional.empty());
+        when(productRepository.findByIdAndIsActiveTrue(unknownId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> productService.deleteProduct(unknownId))
                 .isInstanceOf(ResourceNotFoundException.class);
 
-        verify(productRepository, never()).deleteById(any());
+        verify(productRepository, never()).save(any());
     }
 
     // ═════════════════════════════════════════════════════════════════════════
@@ -405,7 +410,7 @@ class ProductServiceImplTest {
     @Test
     @DisplayName("updateStock: success — stock is updated to new value")
     void updateStock_success() {
-        when(productRepository.findById(dressId)).thenReturn(Optional.of(dress));
+        when(productRepository.findByIdAndIsActiveTrue(dressId)).thenReturn(Optional.of(dress));
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ProductDetailResponse result = productService.updateStock(dressId, 10);
@@ -416,7 +421,7 @@ class ProductServiceImplTest {
     @Test
     @DisplayName("updateStock: success — stock can be set to zero (out of stock)")
     void updateStock_setToZero_success() {
-        when(productRepository.findById(dressId)).thenReturn(Optional.of(dress));
+        when(productRepository.findByIdAndIsActiveTrue(dressId)).thenReturn(Optional.of(dress));
         when(productRepository.save(any(Product.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ProductDetailResponse result = productService.updateStock(dressId, 0);
@@ -428,7 +433,7 @@ class ProductServiceImplTest {
     @DisplayName("updateStock: fail — unknown id throws ResourceNotFoundException")
     void updateStock_notFound_throwsException() {
         UUID unknownId = UUID.randomUUID();
-        when(productRepository.findById(unknownId)).thenReturn(Optional.empty());
+        when(productRepository.findByIdAndIsActiveTrue(unknownId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> productService.updateStock(unknownId, 5))
                 .isInstanceOf(ResourceNotFoundException.class);
@@ -449,12 +454,14 @@ class ProductServiceImplTest {
                 .displayOrder(0)
                 .build();
 
-        when(productRepository.findById(dressId)).thenReturn(Optional.of(dress));
-        when(productImageRepository.findById(imageId)).thenReturn(Optional.of(image));
+        when(productRepository.findByIdAndIsActiveTrue(dressId)).thenReturn(Optional.of(dress));
+        when(productImageRepository.findByIdAndIsActiveTrue(imageId)).thenReturn(Optional.of(image));
+        when(productImageRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         productService.deleteProductImage(dressId, imageId);
 
-        verify(productImageRepository, times(1)).delete(image);
+        verify(productImageRepository, times(1)).save(image);
+        assertThat(image.getIsActive()).isFalse();
     }
 
     @Test
@@ -462,28 +469,28 @@ class ProductServiceImplTest {
     void deleteProductImage_productNotFound_throwsException() {
         UUID unknownProductId = UUID.randomUUID();
         UUID imageId = UUID.randomUUID();
-        when(productRepository.findById(unknownProductId)).thenReturn(Optional.empty());
+        when(productRepository.findByIdAndIsActiveTrue(unknownProductId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> productService.deleteProductImage(unknownProductId, imageId))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Product not found");
 
-        verify(productImageRepository, never()).findById(any());
-        verify(productImageRepository, never()).delete(any());
+        verify(productImageRepository, never()).findByIdAndIsActiveTrue(any());
+        verify(productImageRepository, never()).save(any());
     }
 
     @Test
     @DisplayName("deleteProductImage: fail — unknown imageId throws ResourceNotFoundException")
     void deleteProductImage_imageNotFound_throwsException() {
         UUID unknownImageId = UUID.randomUUID();
-        when(productRepository.findById(dressId)).thenReturn(Optional.of(dress));
-        when(productImageRepository.findById(unknownImageId)).thenReturn(Optional.empty());
+        when(productRepository.findByIdAndIsActiveTrue(dressId)).thenReturn(Optional.of(dress));
+        when(productImageRepository.findByIdAndIsActiveTrue(unknownImageId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> productService.deleteProductImage(dressId, unknownImageId))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Image not found");
 
-        verify(productImageRepository, never()).delete(any());
+        verify(productImageRepository, never()).save(any());
     }
 
     @Test
@@ -499,13 +506,13 @@ class ProductServiceImplTest {
                 .displayOrder(0)
                 .build();
 
-        when(productRepository.findById(dressId)).thenReturn(Optional.of(dress));
-        when(productImageRepository.findById(imageId)).thenReturn(Optional.of(image));
+        when(productRepository.findByIdAndIsActiveTrue(dressId)).thenReturn(Optional.of(dress));
+        when(productImageRepository.findByIdAndIsActiveTrue(imageId)).thenReturn(Optional.of(image));
 
         assertThatThrownBy(() -> productService.deleteProductImage(dressId, imageId))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("Image not found on this product");
 
-        verify(productImageRepository, never()).delete(any());
+        verify(productImageRepository, never()).save(any());
     }
 }

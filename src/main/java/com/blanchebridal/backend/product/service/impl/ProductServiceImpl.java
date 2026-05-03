@@ -54,7 +54,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public ProductDetailResponse getProductBySlug(String slug) {
-        Product product = productRepository.findBySlug(slug)
+        Product product = productRepository.findBySlugAndIsActiveTrue(slug)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + slug));
         return toDetail(product);
     }
@@ -68,7 +68,7 @@ public class ProductServiceImpl implements ProductService {
 
         Category category = null;
         if (request.categoryId() != null) {
-            category = categoryRepository.findById(request.categoryId())
+            category = categoryRepository.findByIdAndIsActiveTrue(request.categoryId())
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "Category not found: " + request.categoryId()));
         }
@@ -110,7 +110,7 @@ public class ProductServiceImpl implements ProductService {
         if (request.sizes()       != null) product.setSizes(toJson(request.sizes()));
 
         if (request.categoryId() != null) {
-            Category category = categoryRepository.findById(request.categoryId())
+            Category category = categoryRepository.findByIdAndIsActiveTrue(request.categoryId())
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "Category not found: " + request.categoryId()));
             product.setCategory(category);
@@ -127,8 +127,9 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public void deleteProduct(UUID id) {
-        findById(id);
-        productRepository.deleteById(id);
+        Product product = findById(id);
+        product.setIsActive(false);
+        productRepository.save(product);
     }
 
     @Override
@@ -144,7 +145,7 @@ public class ProductServiceImpl implements ProductService {
     public void deleteProductImage(UUID productId, UUID imageId) {
         findById(productId); // verify product exists
 
-        ProductImage image = productImageRepository.findById(imageId)
+        ProductImage image = productImageRepository.findByIdAndIsActiveTrue(imageId)
                 .orElseThrow(() -> new ResourceNotFoundException("Image not found: " + imageId));
 
         // Guard: make sure the image actually belongs to this product
@@ -152,13 +153,15 @@ public class ProductServiceImpl implements ProductService {
             throw new ResourceNotFoundException("Image not found on this product");
         }
 
-        productImageRepository.delete(image);
+        // Soft-delete the image
+        image.setIsActive(false);
+        productImageRepository.save(image);
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private Product findById(UUID id) {
-        return productRepository.findById(id)
+        return productRepository.findByIdAndIsActiveTrue(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + id));
     }
 
@@ -203,9 +206,10 @@ public class ProductServiceImpl implements ProductService {
 
     private ProductSummaryResponse toSummary(Product p) {
         String firstImage = (p.getImages() != null && !p.getImages().isEmpty())
-                ? p.getImages().get(0).getUrl() : null;
+                ? p.getImages().getFirst().getUrl() : null;
 
         ProductSummaryResponse.CategoryInfo categoryInfo = p.getCategory() != null
+                && Boolean.TRUE.equals(p.getCategory().getIsActive())
                 ? new ProductSummaryResponse.CategoryInfo(
                 p.getCategory().getId(), p.getCategory().getName())
                 : null;
@@ -227,6 +231,7 @@ public class ProductServiceImpl implements ProductService {
                 .toList();
 
         ProductSummaryResponse.CategoryInfo categoryInfo = p.getCategory() != null
+                && Boolean.TRUE.equals(p.getCategory().getIsActive())
                 ? new ProductSummaryResponse.CategoryInfo(
                 p.getCategory().getId(), p.getCategory().getName())
                 : null;

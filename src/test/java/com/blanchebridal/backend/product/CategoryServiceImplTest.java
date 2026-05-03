@@ -50,6 +50,7 @@ class CategoryServiceImplTest {
                 .name("Bridal Gowns")
                 .slug("bridal-gowns")
                 .parent(null)
+                .isActive(true)
                 .createdAt(LocalDateTime.now())
                 .build();
 
@@ -58,6 +59,7 @@ class CategoryServiceImplTest {
                 .name("Ball Gowns")
                 .slug("ball-gowns")
                 .parent(parentCategory)
+                .isActive(true)
                 .createdAt(LocalDateTime.now())
                 .build();
     }
@@ -69,7 +71,7 @@ class CategoryServiceImplTest {
     @Test
     @DisplayName("getAllCategories: returns all categories including children")
     void getAllCategories_returnsAll() {
-        when(categoryRepository.findAll())
+        when(categoryRepository.findAllByIsActiveTrue())
                 .thenReturn(List.of(parentCategory, childCategory));
 
         List<CategoryResponse> result = categoryService.getAllCategories();
@@ -82,7 +84,7 @@ class CategoryServiceImplTest {
     @Test
     @DisplayName("getAllCategories: returns empty list when no categories exist")
     void getAllCategories_empty_returnsEmptyList() {
-        when(categoryRepository.findAll()).thenReturn(List.of());
+        when(categoryRepository.findAllByIsActiveTrue()).thenReturn(List.of());
 
         List<CategoryResponse> result = categoryService.getAllCategories();
 
@@ -96,7 +98,7 @@ class CategoryServiceImplTest {
     @Test
     @DisplayName("getCategoryById: success — returns correct category")
     void getCategoryById_success() {
-        when(categoryRepository.findById(parentId))
+        when(categoryRepository.findByIdAndIsActiveTrue(parentId))
                 .thenReturn(Optional.of(parentCategory));
 
         CategoryResponse result = categoryService.getCategoryById(parentId);
@@ -111,7 +113,7 @@ class CategoryServiceImplTest {
     @Test
     @DisplayName("getCategoryById: child — response includes parentId and parentName")
     void getCategoryById_child_includesParentInfo() {
-        when(categoryRepository.findById(childId))
+        when(categoryRepository.findByIdAndIsActiveTrue(childId))
                 .thenReturn(Optional.of(childCategory));
 
         CategoryResponse result = categoryService.getCategoryById(childId);
@@ -125,7 +127,7 @@ class CategoryServiceImplTest {
     @DisplayName("getCategoryById: fail — unknown id throws ResourceNotFoundException")
     void getCategoryById_notFound_throwsException() {
         UUID unknownId = UUID.randomUUID();
-        when(categoryRepository.findById(unknownId)).thenReturn(Optional.empty());
+        when(categoryRepository.findByIdAndIsActiveTrue(unknownId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> categoryService.getCategoryById(unknownId))
                 .isInstanceOf(ResourceNotFoundException.class)
@@ -146,6 +148,7 @@ class CategoryServiceImplTest {
                         .name("Veils")
                         .slug("veils")
                         .parent(null)
+                        .isActive(true)
                         .createdAt(LocalDateTime.now())
                         .build()
         );
@@ -162,7 +165,7 @@ class CategoryServiceImplTest {
     @DisplayName("createCategory: success — child category with valid parentId")
     void createCategory_withParent_success() {
         when(categoryRepository.existsBySlug("ball-gowns")).thenReturn(false);
-        when(categoryRepository.findById(parentId)).thenReturn(Optional.of(parentCategory));
+        when(categoryRepository.findByIdAndIsActiveTrue(parentId)).thenReturn(Optional.of(parentCategory));
         when(categoryRepository.save(any(Category.class))).thenReturn(childCategory);
 
         CreateCategoryRequest request = new CreateCategoryRequest(
@@ -191,7 +194,7 @@ class CategoryServiceImplTest {
     void createCategory_parentNotFound_throwsException() {
         UUID unknownParentId = UUID.randomUUID();
         when(categoryRepository.existsBySlug("mini-gowns")).thenReturn(false);
-        when(categoryRepository.findById(unknownParentId)).thenReturn(Optional.empty());
+        when(categoryRepository.findByIdAndIsActiveTrue(unknownParentId)).thenReturn(Optional.empty());
 
         CreateCategoryRequest request = new CreateCategoryRequest(
                 "Mini Gowns", "mini-gowns", unknownParentId);
@@ -208,7 +211,7 @@ class CategoryServiceImplTest {
     @Test
     @DisplayName("updateCategory: success — updates name and slug")
     void updateCategory_updateNameAndSlug_success() {
-        when(categoryRepository.findById(parentId)).thenReturn(Optional.of(parentCategory));
+        when(categoryRepository.findByIdAndIsActiveTrue(parentId)).thenReturn(Optional.of(parentCategory));
         when(categoryRepository.existsBySlug("wedding-gowns")).thenReturn(false);
         when(categoryRepository.save(any(Category.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -223,7 +226,7 @@ class CategoryServiceImplTest {
     @Test
     @DisplayName("updateCategory: success — same slug does not trigger conflict check")
     void updateCategory_sameSlug_noConflict() {
-        when(categoryRepository.findById(parentId)).thenReturn(Optional.of(parentCategory));
+        when(categoryRepository.findByIdAndIsActiveTrue(parentId)).thenReturn(Optional.of(parentCategory));
         when(categoryRepository.save(any(Category.class))).thenAnswer(inv -> inv.getArgument(0));
 
         // Passing the same slug that already exists on this category — should not throw
@@ -240,7 +243,7 @@ class CategoryServiceImplTest {
     @Test
     @DisplayName("updateCategory: fail — new slug already taken throws ConflictException")
     void updateCategory_newSlugTaken_throwsConflict() {
-        when(categoryRepository.findById(parentId)).thenReturn(Optional.of(parentCategory));
+        when(categoryRepository.findByIdAndIsActiveTrue(parentId)).thenReturn(Optional.of(parentCategory));
         when(categoryRepository.existsBySlug("ball-gowns")).thenReturn(true);
 
         UpdateCategoryRequest request = new UpdateCategoryRequest(
@@ -254,7 +257,7 @@ class CategoryServiceImplTest {
     @Test
     @DisplayName("updateCategory: fail — category pointing to itself as parent throws ConflictException")
     void updateCategory_selfParent_throwsConflict() {
-        when(categoryRepository.findById(parentId)).thenReturn(Optional.of(parentCategory));
+        when(categoryRepository.findByIdAndIsActiveTrue(parentId)).thenReturn(Optional.of(parentCategory));
 
         // Trying to set a category's own ID as its parentId
         UpdateCategoryRequest request = new UpdateCategoryRequest(
@@ -269,7 +272,7 @@ class CategoryServiceImplTest {
     @DisplayName("updateCategory: fail — unknown id throws ResourceNotFoundException")
     void updateCategory_notFound_throwsException() {
         UUID unknownId = UUID.randomUUID();
-        when(categoryRepository.findById(unknownId)).thenReturn(Optional.empty());
+        when(categoryRepository.findByIdAndIsActiveTrue(unknownId)).thenReturn(Optional.empty());
 
         UpdateCategoryRequest request = new UpdateCategoryRequest("X", "x", null);
 
@@ -282,26 +285,26 @@ class CategoryServiceImplTest {
     // ═════════════════════════════════════════════════════════════════════════
 
     @Test
-    @DisplayName("deleteCategory: success — calls deleteById on repository")
+    @DisplayName("deleteCategory: success — marks category inactive")
     void deleteCategory_success() {
-        when(categoryRepository.findById(parentId)).thenReturn(Optional.of(parentCategory));
+        when(categoryRepository.findByIdAndIsActiveTrue(parentId)).thenReturn(Optional.of(parentCategory));
+        when(categoryRepository.save(any(Category.class))).thenAnswer(inv -> inv.getArgument(0));
 
         categoryService.deleteCategory(parentId);
 
-        // verify() checks that deleteById was actually called once with the correct ID
-        verify(categoryRepository, times(1)).deleteById(parentId);
+        verify(categoryRepository, times(1)).save(any(Category.class));
+        assertThat(parentCategory.getIsActive()).isFalse();
     }
 
     @Test
     @DisplayName("deleteCategory: fail — unknown id throws ResourceNotFoundException")
     void deleteCategory_notFound_throwsException() {
         UUID unknownId = UUID.randomUUID();
-        when(categoryRepository.findById(unknownId)).thenReturn(Optional.empty());
+        when(categoryRepository.findByIdAndIsActiveTrue(unknownId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> categoryService.deleteCategory(unknownId))
                 .isInstanceOf(ResourceNotFoundException.class);
 
-        // deleteById should never be called if the category doesn't exist
-        verify(categoryRepository, never()).deleteById(any());
+        verify(categoryRepository, never()).save(any());
     }
 }

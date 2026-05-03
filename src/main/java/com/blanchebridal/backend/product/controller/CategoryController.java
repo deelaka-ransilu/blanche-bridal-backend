@@ -64,8 +64,8 @@ public class CategoryController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     public ResponseEntity<Map<String, Object>> delete(@PathVariable UUID id) {
-        log.info("[Category] Delete request — id: {}", id);
+        log.info("[Category] Deactivate request — id: {}", id);
         categoryService.deleteCategory(id);
-        return ResponseEntity.ok(Map.of("success", true, "data", "Category deleted"));
+        return ResponseEntity.ok(Map.of("success", true, "data", "Category deactivated"));
     }
 }

@@ -9,6 +9,8 @@ import java.util.UUID;
 
 public interface CategoryRepository extends JpaRepository<Category, UUID> {
     Optional<Category> findBySlug(String slug);
+    Optional<Category> findByIdAndIsActiveTrue(UUID id);
     boolean existsBySlug(String slug);
-    List<Category> findByParentIsNull();
+    List<Category> findByParentIsNullAndIsActiveTrue();
+    List<Category> findAllByIsActiveTrue();
 }

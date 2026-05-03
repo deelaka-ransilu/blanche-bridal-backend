@@ -14,6 +14,8 @@ public class ProductSpecification {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
+            predicates.add(cb.isTrue(root.get("isActive")));
+
             if (filters.type() != null) {
                 predicates.add(cb.equal(root.get("type"), filters.type()));
             }
