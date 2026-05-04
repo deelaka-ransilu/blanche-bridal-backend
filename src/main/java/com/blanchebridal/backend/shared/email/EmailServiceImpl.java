@@ -37,7 +37,7 @@ public class EmailServiceImpl implements EmailService {
 
         String html = """
                 <!DOCTYPE html>
-   Succession Main Theme - 1 HOUR (EXTENDED Version - Piano + Strings + 808 + Beat)             <html>
+                <html>
                 <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
                     <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px; text-align:center;">
                         <h1 style="color:#8b5e57; margin-bottom:10px;">Welcome to Blanche Bridal</h1>
