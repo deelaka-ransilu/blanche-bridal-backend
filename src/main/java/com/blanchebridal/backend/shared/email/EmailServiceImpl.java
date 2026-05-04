@@ -365,6 +365,80 @@ public class EmailServiceImpl implements EmailService {
         sendHtmlEmail(toEmail, "Action required: Rental return overdue", html);
     }
 
+    @Override
+    public void sendAdminWelcomeEmail(String toEmail,
+                                      String firstName,
+                                      String lastName,
+                                      String temporaryPassword) {
+
+        String loginLink = frontendUrl + "/login";
+
+        String html = """
+                <!DOCTYPE html>
+                <html>
+                <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
+                    <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
+                        <h1 style="color:#8b5e57; text-align:center; margin-bottom:6px;">
+                            Welcome to Blanche Bridal
+                        </h1>
+                        <p style="text-align:center; color:#999999; font-size:14px; margin-top:0;">
+                            Admin Account Created
+                        </p>
+
+                        <p style="color:#444444; font-size:16px; line-height:1.6; margin-top:24px;">
+                            Dear %s %s,
+                        </p>
+
+                        <p style="color:#444444; font-size:16px; line-height:1.6;">
+                            An admin account has been created for you on the Blanche Bridal management system.
+                            Use the credentials below to sign in.
+                        </p>
+
+                        <div style="background-color:#f8f3f0; padding:20px; border-radius:10px; margin:24px 0;">
+                            <p style="margin:0 0 10px 0; color:#444444; font-size:15px;">
+                                <strong>Email:</strong> %s
+                            </p>
+                            <p style="margin:0; color:#444444; font-size:15px;">
+                                <strong>Temporary password:</strong>
+                                <span style="font-family:monospace; background-color:#ffffff; padding:3px 8px; border-radius:4px; border:1px solid #dddddd;">
+                                    %s
+                                </span>
+                            </p>
+                        </div>
+
+                        <p style="color:#b05e00; font-size:14px; line-height:1.6;">
+                            ⚠ Please change your password after your first login.
+                        </p>
+
+                        <div style="text-align:center; margin-top:28px;">
+                            <a href="%s"
+                               style="display:inline-block; padding:14px 32px; background-color:#8b5e57; color:#ffffff;
+                                      text-decoration:none; border-radius:8px; font-weight:bold; font-size:15px;">
+                                Sign In
+                            </a>
+                        </div>
+
+                        <p style="font-size:13px; color:#999999; text-align:center; margin-top:30px;">
+                            If you did not expect this email, please contact your system administrator.
+                        </p>
+
+                        <p style="font-size:14px; color:#8b5e57; text-align:center; margin-top:28px;">
+                            Blanche Bridal
+                        </p>
+                    </div>
+                </body>
+                </html>
+                """.formatted(
+                escapeHtml(firstName),
+                escapeHtml(lastName),
+                escapeHtml(toEmail),
+                escapeHtml(temporaryPassword),
+                loginLink
+        );
+
+        sendHtmlEmail(toEmail, "Your Blanche Bridal admin account is ready", html);
+    }
+
     private void sendHtmlEmail(String toEmail, String subject, String html) {
         try {
             MimeMessage message = mailSender.createMimeMessage();

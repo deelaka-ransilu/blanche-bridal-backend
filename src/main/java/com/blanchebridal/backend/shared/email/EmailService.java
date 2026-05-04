@@ -34,4 +34,9 @@ public interface EmailService {
                                 String productName,
                                 LocalDate rentalEnd,
                                 BigDecimal balanceDue);
+
+    void sendAdminWelcomeEmail(String toEmail,
+                               String firstName,
+                               String lastName,
+                               String temporaryPassword);
 }

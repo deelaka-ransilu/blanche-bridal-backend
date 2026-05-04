@@ -2,6 +2,7 @@ package com.blanchebridal.backend.user.service.impl;
 
 import com.blanchebridal.backend.exception.ConflictException;
 import com.blanchebridal.backend.exception.ResourceNotFoundException;
+import com.blanchebridal.backend.shared.email.EmailService;
 import com.blanchebridal.backend.user.entity.User;
 import com.blanchebridal.backend.user.repository.UserRepository;
 import com.blanchebridal.backend.user.entity.UserRole;
@@ -9,6 +10,7 @@ import com.blanchebridal.backend.user.dto.req.CreateUserRequest;
 import com.blanchebridal.backend.user.dto.res.UserResponse;
 import com.blanchebridal.backend.user.service.AdminService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,14 +19,17 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AdminServiceImpl implements AdminService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final EmailService emailService;   // ← NEW
 
-    // ── Superadmin manages admins ─────────────────────────────────────────
+    // ── Superadmin manages admins ─────────────────────────────────────────────
+
     @Override
     public List<UserResponse> listAdmins() {
         return userRepository.findByRole(UserRole.ADMIN)
@@ -34,7 +39,21 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional
     public UserResponse createAdmin(CreateUserRequest request) {
-        return createUser(request, UserRole.ADMIN);
+        UserResponse response = createUser(request, UserRole.ADMIN);
+
+        // Send welcome email with credentials — fire and forget, never block account creation
+        try {
+            emailService.sendAdminWelcomeEmail(
+                    request.email(),
+                    request.firstName(),
+                    request.lastName(),
+                    request.password()   // plain password — before it's hashed
+            );
+        } catch (Exception e) {
+            log.warn("Admin created but welcome email failed for {}: {}", request.email(), e.getMessage());
+        }
+
+        return response;
     }
 
     @Override
@@ -49,7 +68,8 @@ public class AdminServiceImpl implements AdminService {
         return activateUser(adminId, UserRole.ADMIN);
     }
 
-    // ── Admin manages employees ───────────────────────────────────────────
+    // ── Admin manages employees ───────────────────────────────────────────────
+
     @Override
     public List<UserResponse> listEmployees() {
         return userRepository.findByRole(UserRole.EMPLOYEE)
@@ -74,8 +94,8 @@ public class AdminServiceImpl implements AdminService {
         return activateUser(employeeId, UserRole.EMPLOYEE);
     }
 
+    // ── Admin views customers ─────────────────────────────────────────────────
 
-    // ── Admin views customers ─────────────────────────────────────────────
     @Override
     public List<UserResponse> listCustomers() {
         return userRepository.findByRole(UserRole.CUSTOMER)
@@ -90,7 +110,7 @@ public class AdminServiceImpl implements AdminService {
         return toUserResponse(customer);
     }
 
-    // helpers ─────────────────────────────────────────────
+    // ── private helpers ───────────────────────────────────────────────────────
 
     private UserResponse createUser(CreateUserRequest request, UserRole role) {
         if (userRepository.existsByEmail(request.email())) {
@@ -137,6 +157,4 @@ public class AdminServiceImpl implements AdminService {
                 u.getIsActive(), u.getCreatedAt()
         );
     }
-
-
 }
