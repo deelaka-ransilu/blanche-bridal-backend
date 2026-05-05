@@ -98,7 +98,24 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .notes(req.getNotes())
                 .build();
 
-        return toResponse(appointmentRepository.save(appointment));
+        Appointment saved = appointmentRepository.save(appointment);
+
+        try {
+            emailService.sendAppointmentBookingReceivedEmail(
+                    user.getEmail(),
+                    user.getFirstName() + " " + user.getLastName(),
+                    saved.getId(),
+                    saved.getAppointmentDate(),
+                    saved.getTimeSlot(),
+                    saved.getType().name(),
+                    saved.getProduct() != null ? saved.getProduct().getName() : null
+            );
+        } catch (Exception e) {
+            log.warn("[Appointment] Failed to send booking received email for {}: {}",
+                    saved.getId(), e.getMessage());
+        }
+
+        return toResponse(saved);
     }
 
     @Override
@@ -118,6 +135,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 emailService.sendAppointmentConfirmationEmail(
                         customer.getEmail(),
                         customer.getFirstName() + " " + customer.getLastName(),
+                        saved.getId(),                    // ← ADD THIS LINE
                         saved.getAppointmentDate(),
                         saved.getTimeSlot(),
                         saved.getType().name(),

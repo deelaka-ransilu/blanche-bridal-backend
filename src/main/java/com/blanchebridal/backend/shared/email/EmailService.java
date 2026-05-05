@@ -3,6 +3,7 @@ package com.blanchebridal.backend.shared.email;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.UUID;
 
 public interface EmailService {
 
@@ -18,10 +19,19 @@ public interface EmailService {
 
     void sendAppointmentConfirmationEmail(String toEmail,
                                           String customerName,
+                                          UUID appointmentId,          // ← ADD THIS
                                           LocalDate appointmentDate,
                                           String timeSlot,
                                           String appointmentType,
                                           String productName);
+
+    void sendAppointmentBookingReceivedEmail(String toEmail,
+                                             String customerName,
+                                             UUID appointmentId,
+                                             LocalDate appointmentDate,
+                                             String timeSlot,
+                                             String appointmentType,
+                                             String productName);
 
     void sendAppointmentReminderEmail(String toEmail,
                                       String customerName,
@@ -39,4 +49,6 @@ public interface EmailService {
                                String firstName,
                                String lastName,
                                String temporaryPassword);
+
+
 }

@@ -4,6 +4,7 @@ import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
@@ -12,8 +13,12 @@ import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -189,59 +194,61 @@ public class EmailServiceImpl implements EmailService {
     @Override
     public void sendAppointmentConfirmationEmail(String toEmail,
                                                  String customerName,
+                                                 UUID appointmentId,
                                                  LocalDate appointmentDate,
                                                  String timeSlot,
                                                  String appointmentType,
                                                  String productName) {
-
         String formattedType = formatType(appointmentType);
         String dateStr = appointmentDate.format(DATE_FORMAT);
 
         String productHtml = "";
         if (productName != null && !productName.isBlank()) {
             productHtml = """
-                    <p style="color:#444444; font-size:16px;">
-                        <strong>For:</strong> %s
-                    </p>
-                    """.formatted(escapeHtml(productName));
+                <p style="color:#444444; font-size:16px;">
+                    <strong>For:</strong> %s
+                </p>
+                """.formatted(escapeHtml(productName));
         }
 
         String html = """
-                <!DOCTYPE html>
-                <html>
-                <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
-                    <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
-                        <h1 style="color:#8b5e57; text-align:center;">Appointment Confirmed</h1>
+            <!DOCTYPE html>
+            <html>
+            <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
+                <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
+                    <h1 style="color:#8b5e57; text-align:center;">Appointment Confirmed ✓</h1>
 
-                        <p style="color:#444444; font-size:16px; line-height:1.6;">
-                            Dear %s,
+                    <p style="color:#444444; font-size:16px; line-height:1.6;">Dear %s,</p>
+
+                    <p style="color:#444444; font-size:16px; line-height:1.6;">
+                        Your <strong>%s</strong> appointment has been confirmed by our team.
+                    </p>
+
+                    <div style="background-color:#f8f3f0; padding:18px; border-radius:10px; margin:20px 0;">
+                        <p style="color:#444444; font-size:16px; margin:0 0 8px 0;">
+                            <strong>Date:</strong> %s
                         </p>
-
-                        <p style="color:#444444; font-size:16px; line-height:1.6;">
-                            Your %s appointment has been confirmed.
+                        <p style="color:#444444; font-size:16px; margin:0 0 8px 0;">
+                            <strong>Time:</strong> %s
                         </p>
-
-                        <div style="background-color:#f8f3f0; padding:18px; border-radius:10px; margin:20px 0;">
-                            <p style="color:#444444; font-size:16px;">
-                                <strong>Date:</strong> %s
-                            </p>
-                            <p style="color:#444444; font-size:16px;">
-                                <strong>Time:</strong> %s
-                            </p>
-                            %s
-                        </div>
-
-                        <p style="color:#444444; font-size:16px; line-height:1.6;">
-                            We look forward to seeing you. Please arrive 5 minutes before your appointment time.
-                        </p>
-
-                        <p style="font-size:14px; color:#8b5e57; text-align:center; margin-top:28px;">
-                            Blanche Bridal
-                        </p>
+                        %s
                     </div>
-                </body>
-                </html>
-                """.formatted(
+
+                    <p style="color:#444444; font-size:15px; line-height:1.6;">
+                        A calendar invite is attached — open it to add this appointment directly to your Google Calendar.
+                    </p>
+
+                    <p style="color:#444444; font-size:16px; line-height:1.6;">
+                        Please arrive 5 minutes before your appointment time.
+                    </p>
+
+                    <p style="font-size:14px; color:#8b5e57; text-align:center; margin-top:28px;">
+                        Blanche Bridal Couture
+                    </p>
+                </div>
+            </body>
+            </html>
+            """.formatted(
                 escapeHtml(customerName),
                 escapeHtml(formattedType),
                 escapeHtml(dateStr),
@@ -249,10 +256,91 @@ public class EmailServiceImpl implements EmailService {
                 productHtml
         );
 
-        sendHtmlEmail(
+        byte[] ical = buildIcalBytes(appointmentId, appointmentDate, timeSlot,
+                appointmentType, "CONFIRMED");
+
+        sendHtmlEmailWithIcal(
                 toEmail,
-                "Appointment confirmed - " + formattedType + " on " + dateStr + " at " + timeSlot,
-                html
+                "Appointment confirmed — " + formattedType + " on " + dateStr + " at " + timeSlot,
+                html,
+                ical
+        );
+    }
+
+    @Override
+    public void sendAppointmentBookingReceivedEmail(String toEmail,
+                                                    String customerName,
+                                                    UUID appointmentId,
+                                                    LocalDate appointmentDate,
+                                                    String timeSlot,
+                                                    String appointmentType,
+                                                    String productName) {
+        String formattedType = formatType(appointmentType);
+        String dateStr = appointmentDate.format(DATE_FORMAT);
+
+        String productHtml = "";
+        if (productName != null && !productName.isBlank()) {
+            productHtml = """
+                <p style="color:#444444; font-size:16px; margin:0 0 8px 0;">
+                    <strong>For:</strong> %s
+                </p>
+                """.formatted(escapeHtml(productName));
+        }
+
+        String html = """
+            <!DOCTYPE html>
+            <html>
+            <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
+                <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
+                    <h1 style="color:#8b5e57; text-align:center;">Booking Received</h1>
+
+                    <p style="color:#444444; font-size:16px; line-height:1.6;">Dear %s,</p>
+
+                    <p style="color:#444444; font-size:16px; line-height:1.6;">
+                        Thank you! We've received your <strong>%s</strong> appointment request.
+                        Our team will review it and send you a confirmation shortly.
+                    </p>
+
+                    <div style="background-color:#f8f3f0; padding:18px; border-radius:10px; margin:20px 0;">
+                        <p style="color:#444444; font-size:16px; margin:0 0 8px 0;">
+                            <strong>Date:</strong> %s
+                        </p>
+                        <p style="color:#444444; font-size:16px; margin:0 0 8px 0;">
+                            <strong>Time:</strong> %s
+                        </p>
+                        %s
+                        <p style="color:#888888; font-size:14px; margin:12px 0 0 0;">
+                            Status: <span style="color:#b07d00; font-weight:bold;">Pending Confirmation</span>
+                        </p>
+                    </div>
+
+                    <p style="color:#444444; font-size:15px; line-height:1.6;">
+                        A calendar placeholder is attached so you can block the time in your calendar
+                        while you wait for confirmation.
+                    </p>
+
+                    <p style="font-size:14px; color:#8b5e57; text-align:center; margin-top:28px;">
+                        Blanche Bridal Couture
+                    </p>
+                </div>
+            </body>
+            </html>
+            """.formatted(
+                escapeHtml(customerName),
+                escapeHtml(formattedType),
+                escapeHtml(dateStr),
+                escapeHtml(timeSlot),
+                productHtml
+        );
+
+        byte[] ical = buildIcalBytes(appointmentId, appointmentDate, timeSlot,
+                appointmentType, "TENTATIVE");
+
+        sendHtmlEmailWithIcal(
+                toEmail,
+                "Appointment request received — " + formattedType + " on " + dateStr,
+                html,
+                ical
         );
     }
 
@@ -491,5 +579,105 @@ public class EmailServiceImpl implements EmailService {
                 .replace(">", "&gt;")
                 .replace("\"", "&quot;")
                 .replace("'", "&#39;");
+    }
+
+    /**
+     * Builds a valid iCal (.ics) byte array for the appointment.
+     * STATUS is either "CONFIRMED" or "TENTATIVE".
+     */
+    private byte[] buildIcalBytes(UUID appointmentId,
+                                  LocalDate date,
+                                  String timeSlot,
+                                  String appointmentType,
+                                  String icalStatus) {
+        LocalTime startTime = parseSlotTime(timeSlot);
+        LocalTime endTime = startTime.plusHours(1);
+
+        DateTimeFormatter compact = DateTimeFormatter.ofPattern("yyyyMMdd");
+        DateTimeFormatter timeCompact = DateTimeFormatter.ofPattern("HHmmss");
+
+        String dtStart = date.format(compact) + "T" + startTime.format(timeCompact);
+        String dtEnd   = date.format(compact) + "T" + endTime.format(timeCompact);
+        String dtStamp = LocalDateTime.now(ZoneOffset.UTC)
+                .format(DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'"));
+
+        String formattedType = formatType(appointmentType);
+        String uid = "appt-" + appointmentId + "@blanchebridal.com";
+
+        // Lines must not exceed 75 chars — use folding for long DESCRIPTION
+        String ics = "BEGIN:VCALENDAR\r\n" +
+                "VERSION:2.0\r\n" +
+                "PRODID:-//Blanche Bridal//EN\r\n" +
+                "CALSCALE:GREGORIAN\r\n" +
+                "METHOD:REQUEST\r\n" +
+                "BEGIN:VEVENT\r\n" +
+                "UID:" + uid + "\r\n" +
+                "DTSTAMP:" + dtStamp + "\r\n" +
+                "DTSTART:" + dtStart + "\r\n" +
+                "DTEND:" + dtEnd + "\r\n" +
+                "SUMMARY:Blanche Bridal — " + formattedType + " Appointment\r\n" +
+                "DESCRIPTION:Your " + formattedType + " appointment at Blanche Bridal Couture." +
+                " Please arrive 5 minutes early.\r\n" +
+                "LOCATION:Blanche Bridal Couture\r\n" +
+                "STATUS:" + icalStatus + "\r\n" +
+                "BEGIN:VALARM\r\n" +
+                "TRIGGER:-PT1H\r\n" +
+                "ACTION:DISPLAY\r\n" +
+                "DESCRIPTION:Reminder: Blanche Bridal appointment in 1 hour\r\n" +
+                "END:VALARM\r\n" +
+                "END:VEVENT\r\n" +
+                "END:VCALENDAR\r\n";
+
+        return ics.getBytes(StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Parses slot strings like "09:00", "9:00", "9:00 AM", "09:00 AM".
+     */
+    private LocalTime parseSlotTime(String timeSlot) {
+        if (timeSlot == null || timeSlot.isBlank()) return LocalTime.of(9, 0);
+        String t = timeSlot.trim();
+        // 12-hour with AM/PM
+        for (String pattern : List.of("h:mm a", "hh:mm a", "h:mma", "hh:mma")) {
+            try {
+                return LocalTime.parse(t.toUpperCase(), DateTimeFormatter.ofPattern(pattern));
+            } catch (Exception ignored) {}
+        }
+        // 24-hour
+        for (String pattern : List.of("H:mm", "HH:mm")) {
+            try {
+                return LocalTime.parse(t, DateTimeFormatter.ofPattern(pattern));
+            } catch (Exception ignored) {}
+        }
+        return LocalTime.of(9, 0); // safe fallback
+    }
+
+    /**
+     * Sends an HTML email with an optional iCal .ics attachment.
+     */
+    private void sendHtmlEmailWithIcal(String toEmail, String subject,
+                                       String html, byte[] icalBytes) {
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+
+            helper.setFrom(fromEmail);
+            helper.setTo(toEmail);
+            helper.setSubject(subject);
+            helper.setText(html, true);
+
+            if (icalBytes != null) {
+                helper.addAttachment(
+                        "appointment.ics",
+                        new ByteArrayResource(icalBytes),
+                        "text/calendar; method=REQUEST; charset=UTF-8"
+                );
+            }
+
+            mailSender.send(message);
+
+        } catch (MessagingException e) {
+            throw new RuntimeException("Failed to send email", e);
+        }
     }
 }
