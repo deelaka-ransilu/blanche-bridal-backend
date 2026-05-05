@@ -37,7 +37,6 @@ public class ProductServiceImpl implements ProductService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final ObjectMapper objectMapper;
-    // Add this mock field alongside the others
     private final  ProductImageRepository productImageRepository;
 
     @Override
