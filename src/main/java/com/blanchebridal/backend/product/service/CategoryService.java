@@ -13,4 +13,6 @@ public interface CategoryService {
     CategoryResponse createCategory(CreateCategoryRequest request);
     CategoryResponse updateCategory(UUID id, UpdateCategoryRequest request);
     void deleteCategory(UUID id);
+    List<CategoryResponse> getDeletedCategories();
+    CategoryResponse restoreCategory(UUID id);
 }

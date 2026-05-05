@@ -31,7 +31,7 @@ public class CategoryServiceImpl implements CategoryService {
 
     @Override
     public CategoryResponse getCategoryById(UUID id) {
-        return toResponse(findById(id));
+        return toResponse(findActiveById(id));
     }
 
     @Override
@@ -43,7 +43,7 @@ public class CategoryServiceImpl implements CategoryService {
 
         Category parent = null;
         if (request.parentId() != null) {
-            parent = findById(request.parentId());
+            parent = findActiveById(request.parentId());
         }
 
         Category category = Category.builder()
@@ -58,7 +58,7 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     @Transactional
     public CategoryResponse updateCategory(UUID id, UpdateCategoryRequest request) {
-        Category category = findById(id);
+        Category category = findActiveById(id);
 
         if (request.name() != null) category.setName(request.name());
 
@@ -73,7 +73,7 @@ public class CategoryServiceImpl implements CategoryService {
             if (request.parentId().equals(id)) {
                 throw new ConflictException("A category cannot be its own parent");
             }
-            category.setParent(findById(request.parentId()));
+            category.setParent(findActiveById(request.parentId()));
         } else {
             category.setParent(null);
         }
@@ -84,14 +84,31 @@ public class CategoryServiceImpl implements CategoryService {
     @Override
     @Transactional
     public void deleteCategory(UUID id) {
-        Category category = findById(id);
+        Category category = findActiveById(id);
         category.setIsActive(false);
         categoryRepository.save(category);
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────────
+    @Override
+    public List<CategoryResponse> getDeletedCategories() {
+        return categoryRepository.findByIsActiveFalse()
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
 
-    private Category findById(UUID id) {
+    @Override
+    @Transactional
+    public CategoryResponse restoreCategory(UUID id) {
+        Category category = categoryRepository.findByIdAndIsActiveFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Deleted category not found: " + id));
+        category.setIsActive(true);
+        return toResponse(categoryRepository.save(category));
+    }
+
+    // ─── Helpers ──────────────────────────────────────────────────────────────
+    private Category findActiveById(UUID id) {
         return categoryRepository.findByIdAndIsActiveTrue(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Category not found: " + id));
     }

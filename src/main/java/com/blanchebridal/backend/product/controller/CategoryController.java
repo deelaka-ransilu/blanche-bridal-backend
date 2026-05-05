@@ -68,4 +68,21 @@ public class CategoryController {
         categoryService.deleteCategory(id);
         return ResponseEntity.ok(Map.of("success", true, "data", "Category deactivated"));
     }
+
+    // GET /api/categories/deleted
+    @GetMapping("/deleted")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    public ResponseEntity<Map<String, Object>> getDeleted() {
+        return ResponseEntity.ok(Map.of("success", true,
+                "data", categoryService.getDeletedCategories()));
+    }
+
+    // PUT /api/categories/{id}/restore
+    @PutMapping("/{id}/restore")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    public ResponseEntity<Map<String, Object>> restore(@PathVariable UUID id) {
+        log.info("[Category] Restore → id: {}", id);
+        return ResponseEntity.ok(Map.of("success", true,
+                "data", categoryService.restoreCategory(id)));
+    }
 }
