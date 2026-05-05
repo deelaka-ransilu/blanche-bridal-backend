@@ -22,6 +22,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -35,7 +36,8 @@ public class ProductController {
     private final ReviewService reviewService;
     private final JwtUtil jwtUtil;
 
-    // Public
+    // ── Public ────────────────────────────────────────────────────────────────
+
     @GetMapping
     public ResponseEntity<Map<String, Object>> getAll(
             @RequestParam(required = false) ProductType type,
@@ -71,100 +73,107 @@ public class ProductController {
         ));
     }
 
-    // Public
     @GetMapping("/{id}")
     public ResponseEntity<Map<String, Object>> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(Map.of("success", true,
                 "data", productService.getProductById(id)));
     }
 
-    // Public
     @GetMapping("/slug/{slug}")
     public ResponseEntity<Map<String, Object>> getBySlug(@PathVariable String slug) {
         return ResponseEntity.ok(Map.of("success", true,
                 "data", productService.getProductBySlug(slug)));
     }
 
-    // Admin only
+    // ── Admin only ────────────────────────────────────────────────────────────
+
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     public ResponseEntity<Map<String, Object>> create(
             @Valid @RequestBody CreateProductRequest request) {
-
-        log.info("[Product] Create request — name: {}, type: {}",
-                request.name(), request.type());
+        log.info("[Product] Create → name: {}, type: {}", request.name(), request.type());
         return ResponseEntity.ok(Map.of("success", true,
                 "data", productService.createProduct(request)));
     }
 
-    // Admin only
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     public ResponseEntity<Map<String, Object>> update(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateProductRequest request) {
-
-        log.info("[Product] Update request — id: {}", id);
+        log.info("[Product] Update → id: {}", id);
         return ResponseEntity.ok(Map.of("success", true,
                 "data", productService.updateProduct(id, request)));
     }
 
-    // Admin only
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     public ResponseEntity<Map<String, Object>> delete(@PathVariable UUID id) {
-        log.info("[Product] Deactivate request — id: {}", id);
+        log.info("[Product] Deactivate → id: {}", id);
         productService.deleteProduct(id);
         return ResponseEntity.ok(Map.of("success", true, "data", "Product deactivated"));
     }
 
-    // Admin only
     @PutMapping("/{id}/stock")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     public ResponseEntity<Map<String, Object>> updateStock(
             @PathVariable UUID id,
             @RequestParam int quantity) {
-
-        log.info("[Product] Stock update — id: {}, new quantity: {}", id, quantity);
+        log.info("[Product] Stock update → id: {}, quantity: {}", id, quantity);
         return ResponseEntity.ok(Map.of("success", true,
                 "data", productService.updateStock(id, quantity)));
     }
 
-    // Public — approved reviews for a product
+    // ── NEW: GET /api/products/deleted ────────────────────────────────────────
+    @GetMapping("/deleted")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    public ResponseEntity<Map<String, Object>> getDeleted() {
+        log.info("[Product] Fetching deleted products");
+        List<ProductSummaryResponse> deleted = productService.getDeletedProducts();
+        return ResponseEntity.ok(Map.of("success", true, "data", deleted));
+    }
+
+    // ── NEW: PUT /api/products/{id}/restore ───────────────────────────────────
+    @PutMapping("/{id}/restore")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    public ResponseEntity<Map<String, Object>> restore(@PathVariable UUID id) {
+        log.info("[Product] Restore → id: {}", id);
+        return ResponseEntity.ok(Map.of("success", true,
+                "data", productService.restoreProduct(id)));
+    }
+
+    // ── Public: reviews ───────────────────────────────────────────────────────
+
     @GetMapping("/{id}/reviews")
     public ResponseEntity<Map<String, Object>> getReviews(@PathVariable UUID id) {
         return ResponseEntity.ok(Map.of("success", true,
                 "data", reviewService.getApprovedReviews(id)));
     }
 
-    // Customer only — submit a review
     @PostMapping("/{id}/reviews")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<Map<String, Object>> submitReview(
             @PathVariable UUID id,
             @RequestHeader("Authorization") String authHeader,
             @Valid @RequestBody CreateReviewRequest request) {
-
         UUID userId = extractUserId(authHeader);
-        log.info("[Product] Review submitted — product: {}, user: {}, rating: {}",
+        log.info("[Product] Review → product: {}, user: {}, rating: {}",
                 id, userId, request.rating());
         return ResponseEntity.ok(Map.of("success", true,
                 "data", reviewService.submitReview(id, userId, request)));
     }
 
-    // Admin only — remove a single image from a product
     @DeleteMapping("/{id}/images/{imageId}")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     public ResponseEntity<Map<String, Object>> deleteImage(
             @PathVariable UUID id,
             @PathVariable UUID imageId) {
-
-        log.info("[Product] Image delete — product: {}, image: {}", id, imageId);
+        log.info("[Product] Image delete → product: {}, image: {}", id, imageId);
         productService.deleteProductImage(id, imageId);
         return ResponseEntity.ok(Map.of("success", true, "data", "Image removed"));
     }
 
-    // ─── Helper ───────────────────────────────────────────────────────────────
+    // ── Helper ────────────────────────────────────────────────────────────────
 
     private UUID extractUserId(String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {

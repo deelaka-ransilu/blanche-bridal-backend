@@ -37,7 +37,7 @@ public class ProductServiceImpl implements ProductService {
     private final ProductRepository productRepository;
     private final CategoryRepository categoryRepository;
     private final ObjectMapper objectMapper;
-    private final  ProductImageRepository productImageRepository;
+    private final ProductImageRepository productImageRepository;
 
     @Override
     public Page<ProductSummaryResponse> getProducts(ProductFilters filters, Pageable pageable) {
@@ -48,7 +48,7 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     public ProductDetailResponse getProductById(UUID id) {
-        return toDetail(findById(id));
+        return toDetail(findActiveById(id));
     }
 
     @Override
@@ -94,19 +94,19 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public ProductDetailResponse updateProduct(UUID id, UpdateProductRequest request) {
-        Product product = findById(id);
+        Product product = findActiveById(id);
 
         if (request.name() != null) {
             product.setName(request.name());
             product.setSlug(slugify(request.name()));
         }
-        if (request.description() != null) product.setDescription(request.description());
-        if (request.type()        != null) product.setType(request.type());
-        if (request.rentalPrice() != null) product.setRentalPrice(request.rentalPrice());
+        if (request.description()  != null) product.setDescription(request.description());
+        if (request.type()         != null) product.setType(request.type());
+        if (request.rentalPrice()  != null) product.setRentalPrice(request.rentalPrice());
         if (request.purchasePrice() != null) product.setPurchasePrice(request.purchasePrice());
-        if (request.stock()       != null) product.setStock(request.stock());
-        if (request.isAvailable() != null) product.setIsAvailable(request.isAvailable());
-        if (request.sizes()       != null) product.setSizes(toJson(request.sizes()));
+        if (request.stock()        != null) product.setStock(request.stock());
+        if (request.isAvailable()  != null) product.setIsAvailable(request.isAvailable());
+        if (request.sizes()        != null) product.setSizes(toJson(request.sizes()));
 
         if (request.categoryId() != null) {
             Category category = categoryRepository.findByIdAndIsActiveTrue(request.categoryId())
@@ -126,7 +126,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public void deleteProduct(UUID id) {
-        Product product = findById(id);
+        Product product = findActiveById(id);
         product.setIsActive(false);
         productRepository.save(product);
     }
@@ -134,7 +134,7 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public ProductDetailResponse updateStock(UUID id, int quantity) {
-        Product product = findById(id);
+        Product product = findActiveById(id);
         product.setStock(quantity);
         return toDetail(productRepository.save(product));
     }
@@ -142,24 +142,44 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public void deleteProductImage(UUID productId, UUID imageId) {
-        findById(productId); // verify product exists
+        findActiveById(productId);
 
         ProductImage image = productImageRepository.findByIdAndIsActiveTrue(imageId)
                 .orElseThrow(() -> new ResourceNotFoundException("Image not found: " + imageId));
 
-        // Guard: make sure the image actually belongs to this product
         if (!image.getProduct().getId().equals(productId)) {
             throw new ResourceNotFoundException("Image not found on this product");
         }
 
-        // Soft-delete the image
         image.setIsActive(false);
         productImageRepository.save(image);
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────────
+    // ── NEW: get all deleted (inactive) products ──────────────────────────────
+    @Override
+    public List<ProductSummaryResponse> getDeletedProducts() {
+        return productRepository.findByIsActiveFalse()
+                .stream()
+                .map(this::toSummary)
+                .toList();
+    }
 
-    private Product findById(UUID id) {
+    // ── NEW: restore a deleted product ────────────────────────────────────────
+    @Override
+    @Transactional
+    public ProductDetailResponse restoreProduct(UUID id) {
+        // Use findByIdAndIsActiveFalse — only inactive products can be restored
+        Product product = productRepository.findByIdAndIsActiveFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Deleted product not found: " + id));
+        product.setIsActive(true);
+        return toDetail(productRepository.save(product));
+    }
+
+    // ── private helpers ───────────────────────────────────────────────────────
+
+    // Renamed from findById to make intent clear — only finds ACTIVE products
+    private Product findActiveById(UUID id) {
         return productRepository.findByIdAndIsActiveTrue(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + id));
     }
@@ -225,9 +245,9 @@ public class ProductServiceImpl implements ProductService {
         List<ProductDetailResponse.ImageInfo> images = p.getImages() == null
                 ? Collections.emptyList()
                 : p.getImages().stream()
-                .map(i -> new ProductDetailResponse.ImageInfo(
-                        i.getId(), i.getUrl(), i.getDisplayOrder()))
-                .toList();
+                  .map(i -> new ProductDetailResponse.ImageInfo(
+                          i.getId(), i.getUrl(), i.getDisplayOrder()))
+                  .toList();
 
         ProductSummaryResponse.CategoryInfo categoryInfo = p.getCategory() != null
                 && Boolean.TRUE.equals(p.getCategory().getIsActive())
