@@ -58,6 +58,8 @@ public class OrderServiceImpl implements OrderService {
                         "Product is not available: " + product.getName());
             }
 
+            // Check stock without reducing it — stock is only deducted once
+            // payment is confirmed via the PayHere webhook.
             if (product.getStock() < itemReq.getQuantity()) {
                 throw new IllegalStateException(
                         "Insufficient stock for: " + product.getName());
@@ -89,8 +91,8 @@ public class OrderServiceImpl implements OrderService {
             totalAmount = totalAmount.add(
                     unitPrice.multiply(BigDecimal.valueOf(itemReq.getQuantity())));
 
-            product.setStock(product.getStock() - itemReq.getQuantity());
-            productRepository.save(product);
+            // NOTE: stock is NOT reduced here. It is reduced in PaymentServiceImpl
+            // inside handleWebhook() only when PayHere confirms status_code = 2.
         }
 
         Order order = Order.builder()
@@ -150,7 +152,7 @@ public class OrderServiceImpl implements OrderService {
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + id));
         order.setStatus(newStatus);
         Order saved = orderRepository.save(order);
-        log.info("[Order] Status updated → {} for order {}", newStatus, id);
+        log.info("[Order] Status updated — {} for order {}", newStatus, id);
 
         if (newStatus == OrderStatus.CONFIRMED) {
             try {
@@ -177,6 +179,33 @@ public class OrderServiceImpl implements OrderService {
         }
 
         return toResponse(saved);
+    }
+
+    /**
+     * Called when a customer cancels from the PayHere page.
+     * Only PENDING orders can be cancelled this way — confirmed orders
+     * must go through admin updateOrderStatus.
+     */
+    @Override
+    @Transactional
+    public void cancelOrder(UUID id, UUID userId) {
+        Order order = orderRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + id));
+
+        if (order.getUser() == null || !order.getUser().getId().equals(userId)) {
+            throw new UnauthorizedException("Access denied to this order");
+        }
+
+        if (order.getStatus() != OrderStatus.PENDING) {
+            // Silently ignore — could already be confirmed or previously cancelled
+            log.info("[Order] cancelOrder called on non-PENDING order {} (status: {}). Ignoring.",
+                    id, order.getStatus());
+            return;
+        }
+
+        order.setStatus(OrderStatus.CANCELLED);
+        orderRepository.save(order);
+        log.info("[Order] Cancelled order {} by user {}", id, userId);
     }
 
     // ── Mappers ───────────────────────────────────────────────────────────────

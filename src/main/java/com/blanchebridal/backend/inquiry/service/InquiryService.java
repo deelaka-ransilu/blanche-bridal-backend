@@ -13,4 +13,5 @@ public interface InquiryService {
     Page<InquiryResponse> getAllInquiries(InquiryStatus status, Pageable pageable);
     InquiryResponse getInquiryById(UUID id);
     InquiryResponse updateStatus(UUID id, InquiryStatus newStatus);
+    Page<InquiryResponse> getInquiriesByEmail(String email, Pageable pageable);
 }

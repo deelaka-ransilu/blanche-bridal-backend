@@ -9,9 +9,11 @@ import org.springframework.data.domain.Pageable;
 import java.util.UUID;
 
 public interface OrderService {
+
     OrderResponse createOrder(CreateOrderRequest req, UUID userId);
     Page<OrderResponse> getAllOrders(OrderStatus status, Pageable pageable);
     Page<OrderResponse> getMyOrders(UUID userId, Pageable pageable);
     OrderResponse getOrderById(UUID id, UUID requestingUserId, String role);
     OrderResponse updateOrderStatus(UUID id, OrderStatus newStatus);
+    void cancelOrder(UUID id, UUID userId);
 }

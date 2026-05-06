@@ -10,4 +10,5 @@ import java.util.UUID;
 
 public interface InquiryRepository extends JpaRepository<Inquiry, UUID> {
     Page<Inquiry> findByStatus(InquiryStatus status, Pageable pageable);
+    Page<Inquiry> findByEmail(String email, Pageable pageable);
 }

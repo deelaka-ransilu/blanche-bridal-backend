@@ -120,7 +120,20 @@ public class OrderController {
                 "data", orderService.updateOrderStatus(id, request.getStatus())));
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────────
+    // CUSTOMER — cancel their own PENDING order (called from checkout/cancel page)
+    @PostMapping("/{id}/cancel")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<Map<String, Object>> cancelOrder(
+            @PathVariable UUID id,
+            @RequestHeader("Authorization") String authHeader) {
+
+        UUID userId = extractUserId(authHeader);
+        log.info("[Order] Cancel request — order: {}, user: {}", id, userId);
+        orderService.cancelOrder(id, userId);
+        return ResponseEntity.ok(Map.of("success", true));
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private UUID extractUserId(String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {

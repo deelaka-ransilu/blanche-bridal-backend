@@ -62,6 +62,11 @@ public class InquiryServiceImpl implements InquiryService {
         return toResponse(saved);
     }
 
+    @Override
+    public Page<InquiryResponse> getInquiriesByEmail(String email, Pageable pageable) {
+        return inquiryRepository.findByEmail(email, pageable).map(this::toResponse);
+    }
+
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private Inquiry findOrThrow(UUID id) {
