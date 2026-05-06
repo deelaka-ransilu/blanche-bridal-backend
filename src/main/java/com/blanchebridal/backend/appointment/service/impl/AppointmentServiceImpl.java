@@ -208,7 +208,25 @@ public class AppointmentServiceImpl implements AppointmentService {
             googleCalendarService.updateEvent(appointment.getGoogleEventId(), appointment);
         }
 
-        return toResponse(appointmentRepository.save(appointment));
+        Appointment saved = appointmentRepository.save(appointment);
+
+        try {
+            User customer = saved.getUser();
+            if (customer != null) {
+                emailService.sendAppointmentRescheduledEmail(
+                        customer.getEmail(),
+                        customer.getFirstName() + " " + customer.getLastName(),
+                        saved.getAppointmentDate(),
+                        saved.getTimeSlot(),
+                        saved.getType().name()
+                );
+            }
+        } catch (Exception e) {
+            log.warn("[Appointment] Failed to send reschedule email for {}: {}",
+                    saved.getId(), e.getMessage());
+        }
+
+        return toResponse(saved);
     }
 
     @Override

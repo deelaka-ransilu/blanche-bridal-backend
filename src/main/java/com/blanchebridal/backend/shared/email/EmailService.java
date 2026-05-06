@@ -50,5 +50,9 @@ public interface EmailService {
                                String lastName,
                                String temporaryPassword);
 
-
+    void sendAppointmentRescheduledEmail(String toEmail,
+                                         String customerName,
+                                         LocalDate newDate,
+                                         String newTimeSlot,
+                                         String appointmentType);
 }

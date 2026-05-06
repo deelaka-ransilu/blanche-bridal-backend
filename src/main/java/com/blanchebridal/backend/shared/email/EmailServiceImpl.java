@@ -527,6 +527,58 @@ public class EmailServiceImpl implements EmailService {
         sendHtmlEmail(toEmail, "Your Blanche Bridal admin account is ready", html);
     }
 
+    @Override
+    public void sendAppointmentRescheduledEmail(String toEmail,
+                                                String customerName,
+                                                LocalDate newDate,
+                                                String newTimeSlot,
+                                                String appointmentType) {
+        String formattedType = formatType(appointmentType);
+        String dateStr = newDate.format(DATE_FORMAT);
+
+        String html = """
+        <!DOCTYPE html>
+        <html>
+        <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
+            <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
+                <h1 style="color:#8b5e57; text-align:center;">Appointment Rescheduled</h1>
+
+                <p style="color:#444444; font-size:16px; line-height:1.6;">Dear %s,</p>
+
+                <p style="color:#444444; font-size:16px; line-height:1.6;">
+                    Your <strong>%s</strong> appointment has been rescheduled by our team.
+                    Here are your updated details:
+                </p>
+
+                <div style="background-color:#f8f3f0; padding:18px; border-radius:10px; margin:20px 0;">
+                    <p style="color:#444444; font-size:16px; margin:0 0 8px 0;">
+                        <strong>New Date:</strong> %s
+                    </p>
+                    <p style="color:#444444; font-size:16px; margin:0;">
+                        <strong>New Time:</strong> %s
+                    </p>
+                </div>
+
+                <p style="color:#444444; font-size:15px; line-height:1.6;">
+                    If you have any questions, please contact us directly.
+                </p>
+
+                <p style="font-size:14px; color:#8b5e57; text-align:center; margin-top:28px;">
+                    Blanche Bridal Couture
+                </p>
+            </div>
+        </body>
+        </html>
+        """.formatted(
+                escapeHtml(customerName),
+                escapeHtml(formattedType),
+                escapeHtml(dateStr),
+                escapeHtml(newTimeSlot)
+        );
+
+        sendHtmlEmail(toEmail, "Your appointment has been rescheduled — " + dateStr + " at " + newTimeSlot, html);
+    }
+
     private void sendHtmlEmail(String toEmail, String subject, String html) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
