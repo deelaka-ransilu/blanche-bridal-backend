@@ -41,8 +41,7 @@ public class CorsConfig implements WebMvcConfigurer {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration apiConfig = new CorsConfiguration();
         apiConfig.setAllowedOrigins(List.of(
-                "http://localhost:3000",
-                "https://5c35-112-134-170-216.ngrok-free.app"
+                "http://localhost:3000"
         ));
         apiConfig.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         apiConfig.setAllowedHeaders(List.of("*"));

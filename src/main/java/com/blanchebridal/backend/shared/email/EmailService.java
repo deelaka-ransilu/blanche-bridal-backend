@@ -25,6 +25,23 @@ public interface EmailService {
                                           String appointmentType,
                                           String productName);
 
+    default void sendAppointmentConfirmationEmail(String toEmail,
+                                                   String customerName,
+                                                   LocalDate appointmentDate,
+                                                   String timeSlot,
+                                                   String appointmentType,
+                                                   String productName) {
+        sendAppointmentConfirmationEmail(
+                toEmail,
+                customerName,
+                UUID.randomUUID(),
+                appointmentDate,
+                timeSlot,
+                appointmentType,
+                productName
+        );
+    }
+
     void sendAppointmentBookingReceivedEmail(String toEmail,
                                              String customerName,
                                              UUID appointmentId,

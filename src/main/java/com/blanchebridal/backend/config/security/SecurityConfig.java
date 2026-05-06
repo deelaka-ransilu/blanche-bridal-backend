@@ -39,7 +39,7 @@ public class SecurityConfig {
                                 "/api/products/**",
                                 "/api/categories/**",
                                 "/api/appointments/slots",
-                                "/api/payments/notify",   // ← must be here — PayHere posts without JWT
+                                "/api/payments/notify",
                                 "/actuator/health"
                         ).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET,

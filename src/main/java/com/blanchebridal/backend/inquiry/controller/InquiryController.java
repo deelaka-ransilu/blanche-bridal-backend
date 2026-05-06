@@ -77,8 +77,8 @@ public class InquiryController {
                 "data", inquiryService.updateStatus(id, req.getStatus())));
     }
 
+
     @GetMapping("/my")
-    @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<?> getMyInquiries(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam(defaultValue = "0") int page,

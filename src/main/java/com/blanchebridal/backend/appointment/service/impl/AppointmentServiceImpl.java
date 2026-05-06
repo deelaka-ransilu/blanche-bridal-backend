@@ -135,7 +135,6 @@ public class AppointmentServiceImpl implements AppointmentService {
                 emailService.sendAppointmentConfirmationEmail(
                         customer.getEmail(),
                         customer.getFirstName() + " " + customer.getLastName(),
-                        saved.getId(),                    // ← ADD THIS LINE
                         saved.getAppointmentDate(),
                         saved.getTimeSlot(),
                         saved.getType().name(),

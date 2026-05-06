@@ -10,8 +10,8 @@ import java.util.UUID;
 
 public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByEmail(String email);
-    Optional<User> findByGoogleId(String googleId);
     boolean existsByEmail(String email);
-    // Add to UserRepository.java
     List<User> findByRole(UserRole role);
+    List<User> findAllByRole(UserRole role);
+    Optional<User> findByIdAndRole(UUID id, UserRole role);
 }
