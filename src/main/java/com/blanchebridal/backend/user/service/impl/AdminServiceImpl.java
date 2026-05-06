@@ -79,7 +79,21 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional
     public UserResponse createEmployee(CreateUserRequest request) {
-        return createUser(request, UserRole.EMPLOYEE);
+        UserResponse response = createUser(request, UserRole.EMPLOYEE);
+
+        try {
+            emailService.sendAdminWelcomeEmail(
+                    request.email(),
+                    request.firstName(),
+                    request.lastName(),
+                    request.password()
+            );
+        } catch (Exception e) {
+            log.warn("Employee created but welcome email failed for {}: {}",
+                    request.email(), e.getMessage());
+        }
+
+        return response;
     }
 
     @Override
