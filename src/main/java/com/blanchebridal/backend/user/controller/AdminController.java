@@ -75,4 +75,22 @@ public class AdminController {
         UserResponse customer = adminService.getCustomer(customerId);
         return ResponseEntity.ok(Map.of("success", true, "data", customer));
     }
+
+    // PUT /api/admin/customers/{customerId}/activate
+    @PutMapping("/customers/{customerId}/activate")
+    public ResponseEntity<Map<String, Object>> activateCustomer(
+            @PathVariable UUID customerId) {
+        log.info("[Admin] Activate customer → id: {}", customerId);
+        UserResponse customer = adminService.activateCustomer(customerId);
+        return ResponseEntity.ok(Map.of("success", true, "data", customer));
+    }
+
+    // PUT /api/admin/customers/{customerId}/deactivate
+    @PutMapping("/customers/{customerId}/deactivate")
+    public ResponseEntity<Map<String, Object>> deactivateCustomer(
+            @PathVariable UUID customerId) {
+        log.info("[Admin] Deactivate customer → id: {}", customerId);
+        UserResponse customer = adminService.deactivateCustomer(customerId);
+        return ResponseEntity.ok(Map.of("success", true, "data", customer));
+    }
 }

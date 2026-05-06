@@ -23,4 +23,6 @@ public interface AdminService {
     // ── Admin views customers ─────────────────────────────────────────────
     List<UserResponse> listCustomers();
     UserResponse getCustomer(UUID customerId);
+    UserResponse activateCustomer(UUID customerId);
+    UserResponse deactivateCustomer(UUID customerId);
 }

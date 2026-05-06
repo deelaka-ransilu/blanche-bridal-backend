@@ -110,6 +110,18 @@ public class AdminServiceImpl implements AdminService {
         return toUserResponse(customer);
     }
 
+    @Override
+    @Transactional
+    public UserResponse activateCustomer(UUID customerId) {
+        return activateUser(customerId, UserRole.CUSTOMER);
+    }
+
+    @Override
+    @Transactional
+    public UserResponse deactivateCustomer(UUID customerId) {
+        return deactivateUser(customerId, UserRole.CUSTOMER);
+    }
+
     // ── private helpers ───────────────────────────────────────────────────────
 
     private UserResponse createUser(CreateUserRequest request, UserRole role) {
