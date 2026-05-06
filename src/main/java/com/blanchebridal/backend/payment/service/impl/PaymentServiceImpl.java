@@ -108,8 +108,11 @@ public class PaymentServiceImpl implements PaymentService {
         String receivedHash     = params.getOrDefault("md5sig",            "");
         String payherePaymentId = params.getOrDefault("payment_id",        "");
 
-        String expectedHash = payHereUtil.generateHash(
-                merchantIdParam, orderId, payhereAmount, payhereCurrency);
+//        String expectedHash = payHereUtil.generateHash(
+//               merchantIdParam, orderId, payhereAmount, payhereCurrency);
+
+        String expectedHash = payHereUtil.generateNotifyHash(
+                merchantIdParam, orderId, payhereAmount, payhereCurrency, statusCode);
 
         if (!expectedHash.equalsIgnoreCase(receivedHash)) {
             log.warn("PayHere hash mismatch for order {}. Expected: {} | Got: {}",

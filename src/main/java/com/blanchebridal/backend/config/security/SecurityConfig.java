@@ -36,7 +36,10 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(
                                 "/api/auth/**",
-                                "/api/payments/notify",
+                                "/api/products/**",
+                                "/api/categories/**",
+                                "/api/appointments/slots",
+                                "/api/payments/notify",   // ← must be here — PayHere posts without JWT
                                 "/actuator/health"
                         ).permitAll()
                         .requestMatchers(org.springframework.http.HttpMethod.GET,
