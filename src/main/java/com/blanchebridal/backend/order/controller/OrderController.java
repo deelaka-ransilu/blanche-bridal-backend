@@ -31,7 +31,6 @@ public class OrderController {
     private final OrderService orderService;
     private final JwtUtil jwtUtil;
 
-    // ADMIN + EMPLOYEE — all orders with optional status filter
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> getAllOrders(
@@ -55,7 +54,6 @@ public class OrderController {
         ));
     }
 
-    // CUSTOMER — own orders only
     @GetMapping("/my")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<Map<String, Object>> getMyOrders(
@@ -80,7 +78,6 @@ public class OrderController {
         ));
     }
 
-    // CUSTOMER (own order only) + ADMIN + EMPLOYEE
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> getOrderById(
@@ -93,7 +90,6 @@ public class OrderController {
                 "data", orderService.getOrderById(id, userId, role)));
     }
 
-    // CUSTOMER — create an order
     @PostMapping
     @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<Map<String, Object>> createOrder(
@@ -107,7 +103,6 @@ public class OrderController {
                 "data", orderService.createOrder(request, userId)));
     }
 
-    // ADMIN — update order status
     @PutMapping("/{id}/status")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     public ResponseEntity<Map<String, Object>> updateOrderStatus(
@@ -120,7 +115,6 @@ public class OrderController {
                 "data", orderService.updateOrderStatus(id, request.getStatus())));
     }
 
-    // CUSTOMER — cancel their own PENDING order (called from checkout/cancel page)
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<Map<String, Object>> cancelOrder(
@@ -132,8 +126,6 @@ public class OrderController {
         orderService.cancelOrder(id, userId);
         return ResponseEntity.ok(Map.of("success", true));
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private UUID extractUserId(String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
