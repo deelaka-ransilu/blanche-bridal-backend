@@ -12,6 +12,6 @@ public record ReviewResponse(
         ReviewStatus status,
         String reviewerName,
         LocalDateTime createdAt,
-        UUID productId,       // ← add
-        String productName    // ← add
+        UUID productId,
+        String productName
 ) {}

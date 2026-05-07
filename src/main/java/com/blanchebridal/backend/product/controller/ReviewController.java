@@ -22,7 +22,6 @@ public class ReviewController {
 
     private final ReviewService reviewService;
 
-    // GET /api/reviews?status=PENDING|APPROVED|REJECTED
     @GetMapping
     public ResponseEntity<Map<String, Object>> getByStatus(
             @RequestParam(defaultValue = "PENDING") ReviewStatus status) {
@@ -31,14 +30,12 @@ public class ReviewController {
         return ResponseEntity.ok(Map.of("success", true, "data", reviews));
     }
 
-    // GET /api/reviews/pending — kept for backward compatibility
     @GetMapping("/pending")
     public ResponseEntity<Map<String, Object>> getPending() {
         List<ReviewResponse> reviews = reviewService.getPendingReviews();
         return ResponseEntity.ok(Map.of("success", true, "data", reviews));
     }
 
-    // PUT /api/reviews/{id}/approve
     @PutMapping("/{id}/approve")
     public ResponseEntity<Map<String, Object>> approve(@PathVariable UUID id) {
         log.info("[Review] Approve request — review: {}", id);
@@ -46,11 +43,19 @@ public class ReviewController {
                 "data", reviewService.approveReview(id)));
     }
 
-    // PUT /api/reviews/{id}/reject
     @PutMapping("/{id}/reject")
     public ResponseEntity<Map<String, Object>> reject(@PathVariable UUID id) {
         log.info("[Review] Reject request — review: {}", id);
         return ResponseEntity.ok(Map.of("success", true,
                 "data", reviewService.rejectReview(id)));
+    }
+
+    // GET /api/reviews/stats
+    @GetMapping("/stats")
+    public ResponseEntity<Map<String, Object>> getStats() {
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "data", reviewService.getReviewStats()
+        ));
     }
 }

@@ -12,11 +12,14 @@ import java.util.UUID;
 public interface ReviewRepository extends JpaRepository<Review, UUID> {
 
     List<Review> findByProductIdAndStatus(UUID productId, ReviewStatus status);
-
     List<Review> findByStatus(ReviewStatus status);
-
     boolean existsByProductIdAndUserId(UUID productId, UUID userId);
 
     @Query("SELECT AVG(r.rating) FROM Review r WHERE r.product.id = :productId AND r.status = 'APPROVED'")
     Double findAverageRatingByProductId(@Param("productId") UUID productId);
+
+    @Query("SELECT AVG(r.rating) FROM Review r WHERE r.status = 'APPROVED'")
+    Double findOverallAverageRating();
+
+    long countByStatus(ReviewStatus status);
 }

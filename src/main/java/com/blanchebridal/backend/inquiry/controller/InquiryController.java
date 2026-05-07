@@ -84,6 +84,9 @@ public class InquiryController {
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
+
+        log.info("[Inquiry] /my called by: {}", userDetails.getUsername());
+
         Page<InquiryResponse> result = inquiryService.getInquiriesByEmail(
                 userDetails.getUsername(),
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));

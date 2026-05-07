@@ -4,6 +4,7 @@ import com.blanchebridal.backend.exception.ConflictException;
 import com.blanchebridal.backend.exception.ResourceNotFoundException;
 import com.blanchebridal.backend.product.dto.req.CreateReviewRequest;
 import com.blanchebridal.backend.product.dto.res.ReviewResponse;
+import com.blanchebridal.backend.product.dto.res.ReviewStatsResponse;
 import com.blanchebridal.backend.product.entity.Review;
 import com.blanchebridal.backend.product.entity.ReviewStatus;
 import com.blanchebridal.backend.product.repository.ProductRepository;
@@ -94,7 +95,20 @@ public class ReviewServiceImpl implements ReviewService {
                 .toList();
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────────
+    @Override
+    public ReviewStatsResponse getReviewStats() {
+        Double averageRating = reviewRepository.findOverallAverageRating();
+        long approvedReviews = reviewRepository.countByStatus(ReviewStatus.APPROVED);
+        long pendingReviews = reviewRepository.countByStatus(ReviewStatus.PENDING);
+
+        return new ReviewStatsResponse(
+                averageRating == null ? 0.0 : averageRating,
+                approvedReviews,
+                pendingReviews
+        );
+    }
+
+    // ─── Helpers
 
     private Review findReviewById(UUID id) {
         return reviewRepository.findById(id)

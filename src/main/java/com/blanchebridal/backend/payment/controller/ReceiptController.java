@@ -25,7 +25,6 @@ public class ReceiptController {
 
     private final ReceiptService receiptService;
 
-    // GET /api/receipts/my — customer's own receipts
     @GetMapping("/my")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<Map<String, Object>> getMyReceipts(
@@ -36,7 +35,6 @@ public class ReceiptController {
         return ResponseEntity.ok(Map.of("success", true, "data", receipts));
     }
 
-    // GET /api/receipts — all receipts (admin/employee)
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE', 'SUPERADMIN')")
     public ResponseEntity<Map<String, Object>> getAllReceipts(
