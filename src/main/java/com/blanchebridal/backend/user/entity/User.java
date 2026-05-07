@@ -13,15 +13,17 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "users")
-@Data @Builder
+@Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class User {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private UUID id;
 
-    @Column(unique = true,nullable = false)
+    @Column(unique = true, nullable = false)
     private String email;
 
     @Column(name = "password_hash")
@@ -42,6 +44,9 @@ public class User {
 
     private String phone;
 
+    @Column(columnDefinition = "TEXT")
+    private String address;
+
     @Column(name = "is_active")
     private Boolean isActive = true;
 
@@ -53,4 +58,3 @@ public class User {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 }
-

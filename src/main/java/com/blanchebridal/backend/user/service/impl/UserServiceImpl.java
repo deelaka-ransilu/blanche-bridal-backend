@@ -26,7 +26,7 @@ public class UserServiceImpl implements UserService {
     private final UserRepository userRepository;
     private final CustomerMeasurementRepository measurementRepository;
 
-    // ─── Profile ─────────────────────────────────────────────────────────────
+    // ── Profile ───────────────────────────────────────────────────────────────
 
     @Override
     public UserResponse getProfile(UUID userId) {
@@ -37,14 +37,14 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponse updateProfile(UUID userId, UpdateProfileRequest request) {
         User user = findUserById(userId);
-        // Records use accessor() not getAccessor()
         if (request.firstName() != null) user.setFirstName(request.firstName());
         if (request.lastName()  != null) user.setLastName(request.lastName());
         if (request.phone()     != null) user.setPhone(request.phone());
+        if (request.address()   != null) user.setAddress(request.address());
         return toUserResponse(userRepository.save(user));
     }
 
-    // ─── Measurements ─────────────────────────────────────────────────────────
+    // ── Measurements ──────────────────────────────────────────────────────────
 
     @Override
     @Transactional
@@ -60,7 +60,6 @@ public class UserServiceImpl implements UserService {
                 .customer(customer)
                 .recordedBy(recordedBy)
                 .measuredAt(LocalDateTime.now())
-                // fields matching the entity exactly
                 .heightWithShoes(request.heightWithShoes())
                 .hollowToHem(request.hollowToHem())
                 .fullBust(request.fullBust())
@@ -90,7 +89,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public List<MeasurementsResponse> getMeasurements(UUID customerId) {
-        findUserById(customerId); // verify exists
+        findUserById(customerId);
         return measurementRepository
                 .findByCustomer_IdOrderByMeasuredAtDesc(customerId)
                 .stream()
@@ -98,7 +97,7 @@ public class UserServiceImpl implements UserService {
                 .collect(Collectors.toList());
     }
 
-    // ─── Helpers ──────────────────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private User findUserById(UUID userId) {
         return userRepository.findById(userId)
@@ -112,9 +111,15 @@ public class UserServiceImpl implements UserService {
 
     private UserResponse toUserResponse(User u) {
         return new UserResponse(
-                u.getId(), u.getEmail(), u.getRole().name(),
-                u.getFirstName(), u.getLastName(), u.getPhone(),
-                u.getIsActive(), u.getCreatedAt()
+                u.getId(),
+                u.getEmail(),
+                u.getRole().name(),
+                u.getFirstName(),
+                u.getLastName(),
+                u.getPhone(),
+                u.getAddress(),   // ← this was missing
+                u.getIsActive(),
+                u.getCreatedAt()
         );
     }
 
@@ -122,7 +127,7 @@ public class UserServiceImpl implements UserService {
         return new MeasurementsResponse(
                 m.getId(),
                 m.getPublicId(),
-                m.getCustomer().getId(),   // UUID from the User relation
+                m.getCustomer().getId(),
                 m.getHeightWithShoes(), m.getHollowToHem(),
                 m.getFullBust(), m.getUnderBust(), m.getNaturalWaist(), m.getFullHip(),
                 m.getShoulderWidth(), m.getTorsoLength(), m.getThighCircumference(),

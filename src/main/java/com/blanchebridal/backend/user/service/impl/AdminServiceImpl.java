@@ -322,6 +322,7 @@ public class AdminServiceImpl implements AdminService {
         return new UserResponse(
                 u.getId(), u.getEmail(), u.getRole().name(),
                 u.getFirstName(), u.getLastName(), u.getPhone(),
+                u.getAddress(),    // ← add this line
                 u.getIsActive(), u.getCreatedAt()
         );
     }
