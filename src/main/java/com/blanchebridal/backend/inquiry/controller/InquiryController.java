@@ -1,6 +1,7 @@
 package com.blanchebridal.backend.inquiry.controller;
 
 import com.blanchebridal.backend.inquiry.dto.req.CreateInquiryRequest;
+import com.blanchebridal.backend.inquiry.dto.req.SendInquiryReplyRequest;
 import com.blanchebridal.backend.inquiry.dto.req.UpdateInquiryStatusRequest;
 import com.blanchebridal.backend.inquiry.dto.res.InquiryResponse;
 import com.blanchebridal.backend.inquiry.entity.InquiryStatus;
@@ -87,5 +88,16 @@ public class InquiryController {
                 userDetails.getUsername(),
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
         return ResponseEntity.ok(Map.of("success", true, "data", result.getContent()));
+    }
+
+    @PostMapping("/{id}/reply")
+    @PreAuthorize("hasAnyRole('ADMIN','SUPERADMIN','EMPLOYEE')")
+    public ResponseEntity<?> replyToInquiry(
+            @PathVariable UUID id,
+            @Valid @RequestBody SendInquiryReplyRequest req) {
+        log.info("[Inquiry] Reply being sent for inquiry: {}", id);
+        inquiryService.replyToInquiry(id, req.getMessage());
+        return ResponseEntity.ok(Map.of("success", true,
+                "message", "Reply sent successfully"));
     }
 }

@@ -579,6 +579,48 @@ public class EmailServiceImpl implements EmailService {
         sendHtmlEmail(toEmail, "Your appointment has been rescheduled — " + dateStr + " at " + newTimeSlot, html);
     }
 
+    @Override
+    public void sendInquiryReplyEmail(String toEmail, String customerName,
+                                      String originalMessage, String replyMessage) {
+        String html = """
+        <!DOCTYPE html>
+        <html>
+        <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
+            <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
+                <h1 style="color:#8b5e57; text-align:center;">Response to Your Enquiry</h1>
+
+                <p style="color:#444444; font-size:16px; line-height:1.6;">Dear %s,</p>
+
+                <p style="color:#444444; font-size:16px; line-height:1.6;">
+                    Thank you for reaching out to Blanche Bridal. Here is our response to your enquiry:
+                </p>
+
+                <div style="background-color:#f8f3f0; padding:18px; border-radius:10px; margin:20px 0; border-left:4px solid #8b5e57;">
+                    <p style="color:#444444; font-size:15px; line-height:1.7; margin:0; white-space:pre-wrap;">%s</p>
+                </div>
+
+                <hr style="border:none; border-top:1px solid #eeeeee; margin:24px 0;" />
+
+                <p style="color:#999999; font-size:13px; line-height:1.6;">
+                    <strong>Your original message:</strong><br/>
+                    %s
+                </p>
+
+                <p style="font-size:14px; color:#8b5e57; text-align:center; margin-top:28px;">
+                    Blanche Bridal Couture
+                </p>
+            </div>
+        </body>
+        </html>
+        """.formatted(
+                escapeHtml(customerName),
+                escapeHtml(replyMessage),
+                escapeHtml(originalMessage)
+        );
+
+        sendHtmlEmail(toEmail, "Re: Your Blanche Bridal Enquiry", html);
+    }
+
     private void sendHtmlEmail(String toEmail, String subject, String html) {
         try {
             MimeMessage message = mailSender.createMimeMessage();

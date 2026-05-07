@@ -72,4 +72,9 @@ public interface EmailService {
                                          LocalDate newDate,
                                          String newTimeSlot,
                                          String appointmentType);
+
+    void sendInquiryReplyEmail(String toEmail,
+                               String customerName,
+                               String originalMessage,
+                               String replyMessage);
 }

@@ -7,6 +7,7 @@ import com.blanchebridal.backend.inquiry.entity.Inquiry;
 import com.blanchebridal.backend.inquiry.entity.InquiryStatus;
 import com.blanchebridal.backend.inquiry.repository.InquiryRepository;
 import com.blanchebridal.backend.inquiry.service.InquiryService;
+import com.blanchebridal.backend.shared.email.EmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -21,6 +22,7 @@ import java.util.UUID;
 public class InquiryServiceImpl implements InquiryService {
 
     private final InquiryRepository inquiryRepository;
+    private final EmailService emailService;
 
     @Override
     public InquiryResponse submitInquiry(CreateInquiryRequest req) {
@@ -65,6 +67,25 @@ public class InquiryServiceImpl implements InquiryService {
     @Override
     public Page<InquiryResponse> getInquiriesByEmail(String email, Pageable pageable) {
         return inquiryRepository.findByEmail(email, pageable).map(this::toResponse);
+    }
+
+    @Override
+    public void replyToInquiry(UUID id, String replyMessage) {
+        Inquiry inquiry = inquiryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Inquiry not found"));
+
+        emailService.sendInquiryReplyEmail(
+                inquiry.getEmail(),
+                inquiry.getName(),
+                inquiry.getMessage(),
+                replyMessage
+        );
+
+        // Auto-mark as IN_PROGRESS if still OPEN
+        if (inquiry.getStatus() == InquiryStatus.OPEN) {
+            inquiry.setStatus(InquiryStatus.IN_PROGRESS);
+            inquiryRepository.save(inquiry);
+        }
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────
