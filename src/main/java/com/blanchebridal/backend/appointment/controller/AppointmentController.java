@@ -33,7 +33,6 @@ public class AppointmentController {
     private final AppointmentService appointmentService;
     private final JwtUtil jwtUtil;
 
-    // PUBLIC — available slots for a date
     @GetMapping("/slots")
     public ResponseEntity<Map<String, Object>> getAvailableSlots(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
@@ -44,7 +43,6 @@ public class AppointmentController {
         ));
     }
 
-    // ADMIN + EMPLOYEE — all appointments
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> getAllAppointments(
@@ -68,7 +66,6 @@ public class AppointmentController {
         ));
     }
 
-    // CUSTOMER — own appointments
     @GetMapping("/my")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<Map<String, Object>> getMyAppointments(
@@ -93,7 +90,6 @@ public class AppointmentController {
         ));
     }
 
-    // ALL AUTH — appointment detail
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> getAppointmentById(
@@ -108,7 +104,6 @@ public class AppointmentController {
         ));
     }
 
-    // CUSTOMER — book appointment
     @PostMapping
     @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<Map<String, Object>> bookAppointment(
@@ -124,7 +119,6 @@ public class AppointmentController {
         ));
     }
 
-    // ADMIN — confirm + Google Calendar sync
     @PutMapping("/{id}/confirm")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
     public ResponseEntity<Map<String, Object>> confirmAppointment(
@@ -137,7 +131,6 @@ public class AppointmentController {
         ));
     }
 
-    // ALL AUTH — cancel (customer = own only, admin = any)
     @PutMapping("/{id}/cancel")
     @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> cancelAppointment(
@@ -154,7 +147,6 @@ public class AppointmentController {
         ));
     }
 
-    // CUSTOMER — reschedule own appointment
     @PutMapping("/{id}/reschedule")
     @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'SUPERADMIN')")
     public ResponseEntity<Map<String, Object>> rescheduleAppointment(
@@ -172,7 +164,6 @@ public class AppointmentController {
         ));
     }
 
-    // ADMIN + EMPLOYEE — mark completed
     @PutMapping("/{id}/complete")
     @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> completeAppointment(
@@ -184,8 +175,6 @@ public class AppointmentController {
                 "data", appointmentService.completeAppointment(id)
         ));
     }
-
-    // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private UUID extractUserId(String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {

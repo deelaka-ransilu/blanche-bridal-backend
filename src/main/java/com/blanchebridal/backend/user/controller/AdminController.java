@@ -7,6 +7,7 @@ import com.blanchebridal.backend.user.dto.req.UpdateCustomerProfileRequest;
 import com.blanchebridal.backend.user.dto.res.CustomerDetailResponse;
 import com.blanchebridal.backend.user.dto.res.MeasurementsResponse;
 import com.blanchebridal.backend.user.dto.res.UserResponse;
+import com.blanchebridal.backend.user.entity.User;
 import com.blanchebridal.backend.user.service.AdminService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -14,7 +15,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -34,8 +34,7 @@ public class AdminController {
 
     @GetMapping("/employees")
     public ResponseEntity<Map<String, Object>> listEmployees() {
-        List<UserResponse> employees = adminService.listEmployees();
-        return ResponseEntity.ok(Map.of("success", true, "data", employees));
+        return ResponseEntity.ok(Map.of("success", true, "data", adminService.listEmployees()));
     }
 
     @PostMapping("/employees")
@@ -88,12 +87,11 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("success", true, "data", adminService.createWalkInCustomer(request)));
     }
 
-    // ── Customers — detail (user + profile + measurements) ────────────────
+    // ── Customers — detail ─────────────────────────────────────────────────
 
     @GetMapping("/customers/{customerId}/detail")
     public ResponseEntity<Map<String, Object>> getCustomerDetail(@PathVariable UUID customerId) {
-        CustomerDetailResponse detail = adminService.getCustomerDetail(customerId);
-        return ResponseEntity.ok(Map.of("success", true, "data", detail));
+        return ResponseEntity.ok(Map.of("success", true, "data", adminService.getCustomerDetail(customerId)));
     }
 
     // ── Customers — profile (notes + design images) ───────────────────────
@@ -103,31 +101,25 @@ public class AdminController {
             @PathVariable UUID customerId,
             @RequestBody UpdateCustomerProfileRequest request) {
         log.info("[Admin] Update profile for customer → id: {}", customerId);
-        CustomerDetailResponse detail = adminService.updateCustomerProfile(customerId, request);
-        return ResponseEntity.ok(Map.of("success", true, "data", detail));
+        return ResponseEntity.ok(Map.of("success", true, "data", adminService.updateCustomerProfile(customerId, request)));
     }
 
     // ── Customers — measurements ───────────────────────────────────────────
 
     @GetMapping("/customers/{customerId}/measurements")
     public ResponseEntity<Map<String, Object>> listMeasurements(@PathVariable UUID customerId) {
-        List<MeasurementsResponse> list = adminService.listMeasurements(customerId);
-        return ResponseEntity.ok(Map.of("success", true, "data", list));
+        return ResponseEntity.ok(Map.of("success", true, "data", adminService.listMeasurements(customerId)));
     }
 
     @PostMapping("/customers/{customerId}/measurements")
     public ResponseEntity<Map<String, Object>> addMeasurement(
             @PathVariable UUID customerId,
             @RequestBody MeasurementsRequest request,
-            @AuthenticationPrincipal UserDetails userDetails) {
-        // Resolve admin UUID from the authenticated principal's username (email)
-        // You may already have a helper for this; adjust to your auth setup.
-        UUID adminId = adminService.listEmployees().stream()
-                .filter(e -> e.email().equals(userDetails.getUsername()))
-                .map(UserResponse::id)
-                .findFirst()
-                .orElseThrow();
-        log.info("[Admin] Add measurement for customer → id: {}", customerId);
+            @AuthenticationPrincipal User currentUser) {
+        // JwtFilter sets the full User entity as principal — cast and use getId() directly.
+        // No employee list lookup needed; works for ADMIN and SUPERADMIN roles.
+        UUID adminId = currentUser.getId();
+        log.info("[Admin] Add measurement for customer → id: {}, recorded by: {}", customerId, adminId);
         MeasurementsResponse res = adminService.addMeasurement(customerId, request, adminId);
         return ResponseEntity.ok(Map.of("success", true, "data", res));
     }

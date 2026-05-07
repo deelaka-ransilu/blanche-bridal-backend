@@ -13,17 +13,10 @@ import java.util.UUID;
 public interface AppointmentRepository extends JpaRepository<Appointment, UUID> {
 
     Page<Appointment> findByUser_Id(UUID userId, Pageable pageable);
-
     Page<Appointment> findByStatus(AppointmentStatus status, Pageable pageable);
-
-    // All non-cancelled appointments on a date — used to find booked slots
     List<Appointment> findByAppointmentDateAndStatusNot(
             LocalDate date, AppointmentStatus status);
-
-    // Used to check if a specific slot is already taken on a date
     boolean existsByAppointmentDateAndTimeSlotAndStatusNot(
             LocalDate date, String timeSlot, AppointmentStatus status);
-
-    // Used by AppointmentScheduler to find confirmed appointments for a specific date
     List<Appointment> findByAppointmentDateAndStatus(LocalDate date, AppointmentStatus status);
 }

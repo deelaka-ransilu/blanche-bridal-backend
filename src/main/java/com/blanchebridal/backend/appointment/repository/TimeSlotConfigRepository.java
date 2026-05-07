@@ -7,6 +7,5 @@ import java.util.List;
 import java.util.UUID;
 
 public interface TimeSlotConfigRepository extends JpaRepository<TimeSlotConfig, UUID> {
-
     List<TimeSlotConfig> findByDayOfWeekAndIsActiveTrue(Integer dayOfWeek);
 }
