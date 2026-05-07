@@ -44,11 +44,9 @@ public class InquiryController {
             @RequestParam(required = false) InquiryStatus status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-
         Page<InquiryResponse> result = inquiryService.getAllInquiries(
                 status,
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
-
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "data", result.getContent(),
@@ -71,24 +69,23 @@ public class InquiryController {
     public ResponseEntity<?> updateStatus(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateInquiryStatusRequest req) {
-
         log.info("[Inquiry] Status update request — inquiry: {}, new status: {}",
                 id, req.getStatus());
         return ResponseEntity.ok(Map.of("success", true,
                 "data", inquiryService.updateStatus(id, req.getStatus())));
     }
 
-
+    // CUSTOMER — fetch own inquiries matched by account email
     @GetMapping("/my")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> getMyInquiries(
             @AuthenticationPrincipal UserDetails userDetails,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-
-        log.info("[Inquiry] /my called by: {}", userDetails.getUsername());
-
+        String email = userDetails.getUsername();
+        log.info("[Inquiry] /my called by: {}", email);
         Page<InquiryResponse> result = inquiryService.getInquiriesByEmail(
-                userDetails.getUsername(),
+                email,
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
         return ResponseEntity.ok(Map.of("success", true, "data", result.getContent()));
     }
