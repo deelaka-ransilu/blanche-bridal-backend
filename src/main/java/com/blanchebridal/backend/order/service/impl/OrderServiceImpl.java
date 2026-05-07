@@ -58,8 +58,6 @@ public class OrderServiceImpl implements OrderService {
                         "Product is not available: " + product.getName());
             }
 
-            // Check stock without reducing it — stock is only deducted once
-            // payment is confirmed via the PayHere webhook.
             if (product.getStock() < itemReq.getQuantity()) {
                 throw new IllegalStateException(
                         "Insufficient stock for: " + product.getName());
@@ -90,9 +88,6 @@ public class OrderServiceImpl implements OrderService {
             items.add(item);
             totalAmount = totalAmount.add(
                     unitPrice.multiply(BigDecimal.valueOf(itemReq.getQuantity())));
-
-            // NOTE: stock is NOT reduced here. It is reduced in PaymentServiceImpl
-            // inside handleWebhook() only when PayHere confirms status_code = 2.
         }
 
         Order order = Order.builder()
@@ -100,6 +95,10 @@ public class OrderServiceImpl implements OrderService {
                 .status(OrderStatus.PENDING)
                 .totalAmount(totalAmount)
                 .notes(req.getNotes())
+                .fulfillmentMethod(req.getFulfillmentMethod())
+                .deliveryAddress(req.getDeliveryAddress())
+                .customerPhone(req.getCustomerPhone())
+                .orderMode(req.getOrderMode())
                 .items(items)
                 .build();
 
@@ -181,11 +180,6 @@ public class OrderServiceImpl implements OrderService {
         return toResponse(saved);
     }
 
-    /**
-     * Called when a customer cancels from the PayHere page.
-     * Only PENDING orders can be cancelled this way — confirmed orders
-     * must go through admin updateOrderStatus.
-     */
     @Override
     @Transactional
     public void cancelOrder(UUID id, UUID userId) {
@@ -197,7 +191,6 @@ public class OrderServiceImpl implements OrderService {
         }
 
         if (order.getStatus() != OrderStatus.PENDING) {
-            // Silently ignore — could already be confirmed or previously cancelled
             log.info("[Order] cancelOrder called on non-PENDING order {} (status: {}). Ignoring.",
                     id, order.getStatus());
             return;
@@ -207,8 +200,6 @@ public class OrderServiceImpl implements OrderService {
         orderRepository.save(order);
         log.info("[Order] Cancelled order {} by user {}", id, userId);
     }
-
-    // ── Mappers ───────────────────────────────────────────────────────────────
 
     private OrderResponse toResponse(Order order) {
         List<OrderItemResponse> itemResponses = order.getItems() == null
@@ -230,6 +221,10 @@ public class OrderServiceImpl implements OrderService {
                 .customerEmail(email)
                 .customerFirstName(firstName)
                 .customerLastName(lastName)
+                .fulfillmentMethod(order.getFulfillmentMethod())
+                .deliveryAddress(order.getDeliveryAddress())
+                .customerPhone(order.getCustomerPhone())
+                .orderMode(order.getOrderMode())
                 .build();
     }
 

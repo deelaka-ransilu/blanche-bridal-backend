@@ -5,7 +5,6 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -37,6 +36,18 @@ public class Order {
 
     @Column(columnDefinition = "TEXT")
     private String notes;
+
+    @Column(name = "fulfillment_method", length = 20)
+    private String fulfillmentMethod; // "DELIVERY" or "PICKUP"
+
+    @Column(name = "delivery_address", columnDefinition = "TEXT")
+    private String deliveryAddress;
+
+    @Column(name = "customer_phone", length = 20)
+    private String customerPhone;
+
+    @Column(name = "order_mode", length = 10)
+    private String orderMode;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @ToString.Exclude
