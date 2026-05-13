@@ -14,20 +14,12 @@ import java.util.UUID;
 public interface AppointmentService {
 
     List<String> getAvailableSlots(LocalDate date);
-
     AppointmentResponse bookAppointment(CreateAppointmentRequest req, UUID userId);
-
     AppointmentResponse confirmAppointment(UUID id);
-
     AppointmentResponse cancelAppointment(UUID id, UUID requestingUserId, String role);
-
     AppointmentResponse rescheduleAppointment(UUID id, RescheduleAppointmentRequest req, UUID requestingUserId, String role);
-
     AppointmentResponse completeAppointment(UUID id);
-
     Page<AppointmentResponse> getAllAppointments(AppointmentStatus status, Pageable pageable);
-
     Page<AppointmentResponse> getMyAppointments(UUID userId, Pageable pageable);
-
     AppointmentResponse getAppointmentById(UUID id, UUID requestingUserId, String role);
 }

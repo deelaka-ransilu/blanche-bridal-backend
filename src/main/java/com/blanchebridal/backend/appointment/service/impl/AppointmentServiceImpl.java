@@ -42,6 +42,9 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final GoogleCalendarService googleCalendarService;
     private final EmailService emailService;
 
+    private static final String ROLE_CUSTOMER = "ROLE_CUSTOMER";
+    private static final String ROLE_CUSTOMER_ALT = "CUSTOMER";
+
     @Override
     @Transactional(readOnly = true)
     public List<String> getAvailableSlots(LocalDate date) {
@@ -54,7 +57,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .map(TimeSlotConfig::getSlotTime)
                 .toList();
 
-        // All non-cancelled bookings on this date consume a slot
+        // All noncancelled bookings on this date consume a slot
         Set<String> bookedSlots = appointmentRepository
                 .findByAppointmentDateAndStatusNot(date, AppointmentStatus.CANCELLED)
                 .stream()
@@ -153,15 +156,14 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Transactional
     public AppointmentResponse cancelAppointment(UUID id, UUID requestingUserId, String role) {
         Appointment appointment = findById(id);
+        validateCustomerAccess(appointment, requestingUserId, role);
 
         boolean isCustomer = role != null &&
-                (role.equals("ROLE_CUSTOMER") || role.equals("CUSTOMER"));
+                (role.equals(ROLE_CUSTOMER) || role.equals(ROLE_CUSTOMER_ALT));
 
-        if (isCustomer) {
-            if (appointment.getUser() == null ||
-                    !appointment.getUser().getId().equals(requestingUserId)) {
-                throw new UnauthorizedException("Access denied to this appointment");
-            }
+        if (isCustomer && (appointment.getUser() == null ||
+                !appointment.getUser().getId().equals(requestingUserId))) {
+            throw new UnauthorizedException("Access denied to this appointment");
         }
 
         if (appointment.getGoogleEventId() != null) {
@@ -179,16 +181,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             UUID requestingUserId, String role) {
 
         Appointment appointment = findById(id);
-
-        boolean isCustomer = role != null &&
-                (role.equals("ROLE_CUSTOMER") || role.equals("CUSTOMER"));
-
-        if (isCustomer) {
-            if (appointment.getUser() == null ||
-                    !appointment.getUser().getId().equals(requestingUserId)) {
-                throw new UnauthorizedException("Access denied to this appointment");
-            }
-        }
+        validateCustomerAccess(appointment, requestingUserId, role);
 
         // Check new slot is free
         boolean slotTaken = appointmentRepository
@@ -258,16 +251,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     public AppointmentResponse getAppointmentById(
             UUID id, UUID requestingUserId, String role) {
         Appointment appointment = findById(id);
-
-        boolean isCustomer = role != null &&
-                (role.equals("ROLE_CUSTOMER") || role.equals("CUSTOMER"));
-
-        if (isCustomer) {
-            if (appointment.getUser() == null ||
-                    !appointment.getUser().getId().equals(requestingUserId)) {
-                throw new UnauthorizedException("Access denied to this appointment");
-            }
-        }
+        validateCustomerAccess(appointment, requestingUserId, role);
 
         return toResponse(appointment);
     }
@@ -306,5 +290,17 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .notes(appointment.getNotes())
                 .createdAt(appointment.getCreatedAt())
                 .build();
+    }
+
+    private void validateCustomerAccess(
+            Appointment appointment, UUID requestingUserId, String role) {
+
+        boolean isCustomer = role != null &&
+                (role.equals(ROLE_CUSTOMER) || role.equals(ROLE_CUSTOMER_ALT));
+
+        if (isCustomer && (appointment.getUser() == null ||
+                !appointment.getUser().getId().equals(requestingUserId))) {
+            throw new UnauthorizedException("Access denied to this appointment");
+        }
     }
 }
