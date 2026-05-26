@@ -1,6 +1,8 @@
 spring:
   application:
     name: blanche-bridal
+  profiles:
+    active: local
 
   jpa:
     hibernate:

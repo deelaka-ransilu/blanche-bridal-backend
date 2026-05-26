@@ -8,6 +8,7 @@ import com.google.api.services.calendar.model.Event;
 import com.google.api.services.calendar.model.EventDateTime;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -19,10 +20,11 @@ import java.util.List;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
+//@RequiredArgsConstructor
 public class GoogleCalendarServiceImpl implements GoogleCalendarService {
 
-    private final Calendar googleCalendarClient;
+    @Autowired(required = false)
+    private Calendar googleCalendarClient;
 
     @Value("${google.calendar-id}")
     private String calendarId;
@@ -34,6 +36,10 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
 
     @Override
     public String createEvent(Appointment appointment) {
+        if (googleCalendarClient == null) {
+            log.warn("[GoogleCalendar] Disabled — skipping event creation");
+            return null;
+        }
         try {
             Event event = buildEvent(appointment);
 
@@ -56,6 +62,7 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
 
     @Override
     public void updateEvent(String googleEventId, Appointment appointment) {
+        if (googleCalendarClient == null) { return; }
         try {
             Event existing = googleCalendarClient
                     .events()
@@ -91,6 +98,7 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
 
     @Override
     public void deleteEvent(String googleEventId) {
+        if (googleCalendarClient == null) { return; }
         try {
             googleCalendarClient
                     .events()

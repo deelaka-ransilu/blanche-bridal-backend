@@ -14,8 +14,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.Authentication;          // ← new
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -79,14 +78,29 @@ public class InquiryController {
     @GetMapping("/my")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<?> getMyInquiries(
-            @AuthenticationPrincipal UserDetails userDetails,
+            Authentication authentication,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        String email = userDetails.getUsername();
-        log.info("[Inquiry] /my called by: {}", email);
+
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(401).body(Map.of("success", false, "message", "Unauthorized"));
+        }
+
+        // authentication.getName() returns User.toString() — cast the principal instead
+        String email;
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof com.blanchebridal.backend.user.entity.User user) {
+            email = user.getEmail();
+        } else {
+            email = authentication.getName();
+        }
+
+//        log.info("[Inquiry] /my — resolved email: '{}'", email);
+
         Page<InquiryResponse> result = inquiryService.getInquiriesByEmail(
                 email,
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
+
         return ResponseEntity.ok(Map.of("success", true, "data", result.getContent()));
     }
 
@@ -95,7 +109,7 @@ public class InquiryController {
     public ResponseEntity<?> replyToInquiry(
             @PathVariable UUID id,
             @Valid @RequestBody SendInquiryReplyRequest req) {
-        log.info("[Inquiry] Reply being sent for inquiry: {}", id);
+//        log.info("[Inquiry] Reply being sent for inquiry: {}", id);
         inquiryService.replyToInquiry(id, req.getMessage());
         return ResponseEntity.ok(Map.of("success", true,
                 "message", "Reply sent successfully"));

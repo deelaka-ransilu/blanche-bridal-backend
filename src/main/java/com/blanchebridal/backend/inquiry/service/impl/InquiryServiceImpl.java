@@ -66,7 +66,8 @@ public class InquiryServiceImpl implements InquiryService {
 
     @Override
     public Page<InquiryResponse> getInquiriesByEmail(String email, Pageable pageable) {
-        return inquiryRepository.findByEmail(email, pageable).map(this::toResponse);
+        // case-insensitive match so "Jane@gmail.com" finds "jane@gmail.com"
+        return inquiryRepository.findByEmailIgnoreCase(email, pageable).map(this::toResponse);
     }
 
     @Override

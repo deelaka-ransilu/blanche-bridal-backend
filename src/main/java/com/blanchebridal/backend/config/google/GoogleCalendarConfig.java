@@ -8,6 +8,7 @@ import com.google.auth.http.HttpCredentialsAdapter;
 import com.google.auth.oauth2.GoogleCredentials;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -19,10 +20,11 @@ import java.util.List;
 @Configuration
 public class GoogleCalendarConfig {
 
-    @Value("${google.service-account-key}")
+    @Value("${google.service-account-key:#{null}}")
     private String serviceAccountKeyBase64;
 
     @Bean
+    @ConditionalOnProperty(name = "google.calendar.enabled", havingValue = "true")
     public Calendar googleCalendarClient() throws Exception {
         byte[] keyBytes = Base64.getDecoder().decode(serviceAccountKeyBase64);
 
