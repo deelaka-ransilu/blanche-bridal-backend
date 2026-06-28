@@ -3,6 +3,8 @@ package com.blanchebridal.backend.exception;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -27,6 +29,22 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<Map<String, Object>> handleConflict(ConflictException ex) {
         return buildError("CONFLICT", ex.getMessage(), HttpStatus.CONFLICT);
+    }
+
+    // NEW: covers BadCredentialsException and any other Spring Security auth failure
+    // (wrong password, disabled account, etc.) — was previously falling into the
+    // generic Exception handler below and returning 500 instead of 401.
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<Map<String, Object>> handleAuthentication(AuthenticationException ex) {
+        return buildError("UNAUTHORIZED", "Invalid email or password", HttpStatus.UNAUTHORIZED);
+    }
+
+    // NEW: covers AccessDeniedException and its subclass AuthorizationDeniedException
+    // (thrown by @PreAuthorize / hasRole checks) — was previously falling into the
+    // generic Exception handler below and returning 500 instead of 403.
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException ex) {
+        return buildError("FORBIDDEN", "You do not have permission to perform this action", HttpStatus.FORBIDDEN);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -84,5 +102,12 @@ public class GlobalExceptionHandler {
         response.put("error", code);
 
         return ResponseEntity.status(status).body(response);
+    }
+
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Map<String, Object>> handleTypeMismatch(
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex) {
+        return buildError("BAD_REQUEST",
+                "Invalid value for parameter: " + ex.getName(), HttpStatus.BAD_REQUEST);
     }
 }

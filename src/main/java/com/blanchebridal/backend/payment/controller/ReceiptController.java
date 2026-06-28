@@ -36,7 +36,7 @@ public class ReceiptController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE','SUPERADMIN')")
     public ResponseEntity<Map<String, Object>> getAllReceipts(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {

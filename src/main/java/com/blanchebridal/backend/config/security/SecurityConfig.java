@@ -47,8 +47,8 @@ public class SecurityConfig {
                         .requestMatchers(org.springframework.http.HttpMethod.POST,
                                 "/api/inquiries").permitAll()
                         .requestMatchers("/api/superadmin/**").hasRole("SUPERADMIN")
-                        .requestMatchers("/api/admin/**").hasAnyRole("ADMIN", "SUPERADMIN")
-                        .requestMatchers("/api/employee/**").hasAnyRole("EMPLOYEE", "ADMIN", "SUPERADMIN")
+                        .requestMatchers("/api/admin/**").hasAnyRole("ADMIN","SUPERADMIN")
+                        .requestMatchers("/api/employee/**").hasAnyRole("EMPLOYEE", "ADMIN","SUPERADMIN")
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
