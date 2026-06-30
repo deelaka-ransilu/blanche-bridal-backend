@@ -47,21 +47,19 @@ public class GlobalExceptionHandler {
         return buildError("FORBIDDEN", "You do not have permission to perform this action", HttpStatus.FORBIDDEN);
     }
 
+    // MethodArgumentNotValidException — NEW (flat shape, matches buildError)
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidation(MethodArgumentNotValidException ex) {
         Map<String, String> fields = new HashMap<>();
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
             fields.put(error.getField(), error.getDefaultMessage());
         }
-        Map<String, Object> error = new HashMap<>();
-        error.put("code", "VALIDATION_ERROR");
-        error.put("message", "Validation failed");
-        error.put("status", 400);
-        error.put("fields", fields);
 
         Map<String, Object> response = new HashMap<>();
         response.put("success", false);
-        response.put("error", error);
+        response.put("message", "Validation failed");
+        response.put("error", "VALIDATION_ERROR");
+        response.put("fields", fields);
         return ResponseEntity.badRequest().body(response);
     }
 
@@ -81,16 +79,10 @@ public class GlobalExceptionHandler {
         return buildError("INTERNAL_ERROR", "Something went wrong", HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
+    // IllegalStateException — NEW (just delegate to buildError, same as the others)
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Map<String, Object>> handleIllegalState(IllegalStateException ex) {
-        return ResponseEntity.badRequest().body(Map.of(
-                "success", false,
-                "error", Map.of(
-                        "code", "BUSINESS_RULE_VIOLATION",
-                        "message", ex.getMessage(),
-                        "status", 400
-                )
-        ));
+        return buildError("BUSINESS_RULE_VIOLATION", ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
 
     private ResponseEntity<Map<String, Object>> buildError(

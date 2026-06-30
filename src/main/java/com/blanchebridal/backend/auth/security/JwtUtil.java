@@ -13,37 +13,33 @@ import java.util.Date;
 @Component
 public class JwtUtil {
 
-    private final String secret;
+    private final SecretKey signingKey;
     private final long expiration;
 
     public JwtUtil(
             @Value("${jwt.secret}") String secret,
             @Value("${jwt.expiration}") long expiration) {
-        this.secret = secret;
+        this.signingKey = Keys.hmacShaKeyFor(secret.getBytes());
         this.expiration = expiration;
-    }
-
-    private SecretKey getSigningKey() {
-        return Keys.hmacShaKeyFor(secret.getBytes());
     }
 
     public String generateToken(User user) {
         return Jwts.builder()
                 .subject(user.getEmail())
-                .claim("role", user.getRole().name())
+                .claim("role",      user.getRole().name())
+                .claim("userId",    user.getId().toString())
                 .claim("firstName", user.getFirstName())
-                .claim("lastName", user.getLastName())
-                .claim("userId", user.getId().toString())
+                .claim("lastName",  user.getLastName())
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + expiration))
-                .signWith(getSigningKey())
+                .signWith(signingKey)
                 .compact();
     }
 
     public boolean validateToken(String token) {
         try {
             Jwts.parser()
-                    .verifyWith(getSigningKey())
+                    .verifyWith(signingKey)
                     .build()
                     .parseSignedClaims(token);
             return true;
@@ -66,7 +62,7 @@ public class JwtUtil {
 
     private Claims getClaims(String token) {
         return Jwts.parser()
-                .verifyWith(getSigningKey())
+                .verifyWith(signingKey)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();

@@ -34,7 +34,7 @@ public class OrderScheduler {
 
     private static final int PENDING_TIMEOUT_MINUTES = 30;
 
-    @Scheduled(fixedRate = 300_000) // every 5 minutes
+//    @Scheduled(fixedRate = 300_000) // every 5 minutes
     @Transactional
     public void cancelStaleOrders() {
         LocalDateTime cutoff = LocalDateTime.now().minusMinutes(PENDING_TIMEOUT_MINUTES);

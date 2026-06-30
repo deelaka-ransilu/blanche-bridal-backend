@@ -51,7 +51,8 @@ class AuthControllerTest {
         );
 
         when(authService.register(any(RegisterRequest.class)))
-                .thenReturn(new AuthResponse("mock.jwt.token", "CUSTOMER"));
+                .thenReturn(
+                        new AuthResponse("mock.jwt.token", "CUSTOMER"));
 
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)

@@ -9,10 +9,7 @@ import com.blanchebridal.backend.user.dto.req.UpdateCustomerProfileRequest;
 import com.blanchebridal.backend.user.dto.res.CustomerDetailResponse;
 import com.blanchebridal.backend.user.dto.res.MeasurementsResponse;
 import com.blanchebridal.backend.user.dto.res.UserResponse;
-import com.blanchebridal.backend.user.entity.CustomerMeasurement;
-import com.blanchebridal.backend.user.entity.CustomerProfile;
-import com.blanchebridal.backend.user.entity.User;
-import com.blanchebridal.backend.user.entity.UserRole;
+import com.blanchebridal.backend.user.entity.*;
 import com.blanchebridal.backend.user.repository.CustomerMeasurementRepository;
 import com.blanchebridal.backend.user.repository.CustomerProfileRepository;
 import com.blanchebridal.backend.user.repository.UserRepository;
@@ -38,14 +35,12 @@ public class AdminServiceImpl implements AdminService {
     private final CustomerProfileRepository profileRepository;
     private final PasswordEncoder passwordEncoder;
 
-    // ── Sequence helper for public_id ──────────────────────────────────────
-    // In production this would use the DB sequence; here we derive from count.
     private String generatePublicId() {
         long count = measurementRepository.count() + 1;
         return String.format("MEAS-%05d", count);
     }
 
-    // ── Employees ──────────────────────────────────────────────────────────
+    // ── Admins ────────────────────────────────────────────────────────────────
 
     @Override
     public List<UserResponse> listAdmins() {
@@ -56,7 +51,7 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional
     public UserResponse createAdmin(CreateUserRequest request) {
-        if (userRepository.existsByEmail(request.email())) {
+        if (userRepository.existsByEmailAndStatusNot(request.email(), UserStatus.INACTIVE)) {
             throw new ConflictException("Email already in use");
         }
         User user = User.builder()
@@ -66,7 +61,7 @@ public class AdminServiceImpl implements AdminService {
                 .lastName(request.lastName())
                 .phone(request.phone())
                 .role(UserRole.ADMIN)
-                .isActive(true)
+                .status(UserStatus.ACTIVE) // Admin-created accounts skip verification
                 .build();
         return toUserResponse(userRepository.save(user));
     }
@@ -75,7 +70,7 @@ public class AdminServiceImpl implements AdminService {
     @Transactional
     public UserResponse deactivateAdmin(UUID adminId) {
         User user = findUserByIdAndRole(adminId, UserRole.ADMIN);
-        user.setIsActive(false);
+        user.setStatus(UserStatus.INACTIVE);
         return toUserResponse(userRepository.save(user));
     }
 
@@ -83,9 +78,11 @@ public class AdminServiceImpl implements AdminService {
     @Transactional
     public UserResponse activateAdmin(UUID adminId) {
         User user = findUserByIdAndRole(adminId, UserRole.ADMIN);
-        user.setIsActive(true);
+        user.setStatus(UserStatus.ACTIVE);
         return toUserResponse(userRepository.save(user));
     }
+
+    // ── Employees ─────────────────────────────────────────────────────────────
 
     @Override
     public List<UserResponse> listEmployees() {
@@ -96,7 +93,7 @@ public class AdminServiceImpl implements AdminService {
     @Override
     @Transactional
     public UserResponse createEmployee(CreateUserRequest request) {
-        if (userRepository.existsByEmail(request.email())) {
+        if (userRepository.existsByEmailAndStatusNot(request.email(), UserStatus.INACTIVE)) {
             throw new ConflictException("Email already in use");
         }
         User user = User.builder()
@@ -106,7 +103,7 @@ public class AdminServiceImpl implements AdminService {
                 .lastName(request.lastName())
                 .phone(request.phone())
                 .role(UserRole.EMPLOYEE)
-                .isActive(true)
+                .status(UserStatus.ACTIVE) // Admin-created accounts skip verification
                 .build();
         return toUserResponse(userRepository.save(user));
     }
@@ -115,7 +112,7 @@ public class AdminServiceImpl implements AdminService {
     @Transactional
     public UserResponse activateEmployee(UUID employeeId) {
         User user = findUserByIdAndRole(employeeId, UserRole.EMPLOYEE);
-        user.setIsActive(true);
+        user.setStatus(UserStatus.ACTIVE);
         return toUserResponse(userRepository.save(user));
     }
 
@@ -123,11 +120,11 @@ public class AdminServiceImpl implements AdminService {
     @Transactional
     public UserResponse deactivateEmployee(UUID employeeId) {
         User user = findUserByIdAndRole(employeeId, UserRole.EMPLOYEE);
-        user.setIsActive(false);
+        user.setStatus(UserStatus.INACTIVE);
         return toUserResponse(userRepository.save(user));
     }
 
-    // ── Customers — basic ──────────────────────────────────────────────────
+    // ── Customers ─────────────────────────────────────────────────────────────
 
     @Override
     public List<UserResponse> listCustomers() {
@@ -144,7 +141,7 @@ public class AdminServiceImpl implements AdminService {
     @Transactional
     public UserResponse activateCustomer(UUID customerId) {
         User user = findUserByIdAndRole(customerId, UserRole.CUSTOMER);
-        user.setIsActive(true);
+        user.setStatus(UserStatus.ACTIVE);
         return toUserResponse(userRepository.save(user));
     }
 
@@ -152,29 +149,26 @@ public class AdminServiceImpl implements AdminService {
     @Transactional
     public UserResponse deactivateCustomer(UUID customerId) {
         User user = findUserByIdAndRole(customerId, UserRole.CUSTOMER);
-        user.setIsActive(false);
+        user.setStatus(UserStatus.INACTIVE);
         return toUserResponse(userRepository.save(user));
     }
-
-    // ── Walk-in customer creation ──────────────────────────────────────────
 
     @Override
     @Transactional
     public UserResponse createWalkInCustomer(CreateWalkInCustomerRequest request) {
-        if (userRepository.findByEmail(request.email()).isPresent()) {
+        if (userRepository.existsByEmailAndStatusNot(request.email(), UserStatus.INACTIVE)) {
             throw new ConflictException("A customer with this email already exists");
         }
         User user = User.builder()
                 .email(request.email())
-                .passwordHash(null) // walk-in: no password yet
+                .passwordHash(null)
                 .firstName(request.firstName())
                 .lastName(request.lastName())
                 .phone(request.phone())
                 .role(UserRole.CUSTOMER)
-                .isActive(true)
+                .status(UserStatus.ACTIVE) // Admin vouches — no verification needed
                 .build();
         User saved = userRepository.save(user);
-        // create an empty profile row immediately
         CustomerProfile profile = CustomerProfile.builder()
                 .customer(saved)
                 .adminNotes(null)
@@ -184,7 +178,7 @@ public class AdminServiceImpl implements AdminService {
         return toUserResponse(saved);
     }
 
-    // ── Customer detail ────────────────────────────────────────────────────
+    // ── Customer detail ───────────────────────────────────────────────────────
 
     @Override
     public CustomerDetailResponse getCustomerDetail(UUID customerId) {
@@ -201,26 +195,18 @@ public class AdminServiceImpl implements AdminService {
         return toCustomerDetail(customer, profile, measurements);
     }
 
-    // ── Customer profile update ────────────────────────────────────────────
-
     @Override
     @Transactional
-    public CustomerDetailResponse updateCustomerProfile(UUID customerId, UpdateCustomerProfileRequest request) {
+    public CustomerDetailResponse updateCustomerProfile(UUID customerId,
+                                                        UpdateCustomerProfileRequest request) {
         User customer = findUserByIdAndRole(customerId, UserRole.CUSTOMER);
         CustomerProfile profile = profileRepository.findByCustomerId(customerId)
-                .orElseGet(() -> {
-                    CustomerProfile p = CustomerProfile.builder()
-                            .customer(customer)
-                            .designImageUrls(new ArrayList<>())
-                            .build();
-                    return profileRepository.save(p);
-                });
-        if (request.adminNotes() != null) {
-            profile.setAdminNotes(request.adminNotes());
-        }
-        if (request.designImageUrls() != null) {
-            profile.setDesignImageUrls(request.designImageUrls());
-        }
+                .orElseGet(() -> profileRepository.save(CustomerProfile.builder()
+                        .customer(customer)
+                        .designImageUrls(new ArrayList<>())
+                        .build()));
+        if (request.adminNotes() != null) profile.setAdminNotes(request.adminNotes());
+        if (request.designImageUrls() != null) profile.setDesignImageUrls(request.designImageUrls());
         profileRepository.save(profile);
         List<MeasurementsResponse> measurements = measurementRepository
                 .findAllByCustomerIdOrderByMeasuredAtDesc(customerId)
@@ -228,15 +214,15 @@ public class AdminServiceImpl implements AdminService {
         return toCustomerDetail(customer, profile, measurements);
     }
 
-    // ── Measurements ───────────────────────────────────────────────────────
+    // ── Measurements ──────────────────────────────────────────────────────────
 
     @Override
     @Transactional
-    public MeasurementsResponse addMeasurement(UUID customerId, MeasurementsRequest req, UUID recordedByAdminId) {
+    public MeasurementsResponse addMeasurement(UUID customerId, MeasurementsRequest req,
+                                               UUID recordedByAdminId) {
         User customer = findUserByIdAndRole(customerId, UserRole.CUSTOMER);
         User admin = userRepository.findById(recordedByAdminId)
                 .orElseThrow(() -> new ResourceNotFoundException("Admin not found"));
-
         CustomerMeasurement m = CustomerMeasurement.builder()
                 .publicId(generatePublicId())
                 .customer(customer)
@@ -270,7 +256,8 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     @Transactional
-    public MeasurementsResponse updateMeasurement(UUID customerId, UUID measurementId, MeasurementsRequest req) {
+    public MeasurementsResponse updateMeasurement(UUID customerId, UUID measurementId,
+                                                  MeasurementsRequest req) {
         CustomerMeasurement m = measurementRepository.findById(measurementId)
                 .orElseThrow(() -> new ResourceNotFoundException("Measurement not found"));
         if (!m.getCustomer().getId().equals(customerId)) {
@@ -303,17 +290,17 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     public List<MeasurementsResponse> listMeasurements(UUID customerId) {
-        findUserByIdAndRole(customerId, UserRole.CUSTOMER); // verify exists
+        findUserByIdAndRole(customerId, UserRole.CUSTOMER);
         return measurementRepository
                 .findAllByCustomerIdOrderByMeasuredAtDesc(customerId)
                 .stream().map(this::toMeasurementsResponse).toList();
     }
 
-    // ── Helpers ────────────────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private User findUserByIdAndRole(UUID id, UserRole role) {
         return userRepository.findById(id)
-                .filter(user -> user.getRole() == role)
+                .filter(u -> u.getRole() == role)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         role.name().charAt(0) + role.name().substring(1).toLowerCase() + " not found"));
     }
@@ -322,8 +309,9 @@ public class AdminServiceImpl implements AdminService {
         return new UserResponse(
                 u.getId(), u.getEmail(), u.getRole().name(),
                 u.getFirstName(), u.getLastName(), u.getPhone(),
-                u.getAddress(),    // ← add this line
-                u.getIsActive(), u.getCreatedAt()
+                u.getAddress(),
+                u.isActive(),   // ← helper method, not getIsActive()
+                u.getCreatedAt()
         );
     }
 
@@ -341,10 +329,11 @@ public class AdminServiceImpl implements AdminService {
         );
     }
 
-    private CustomerDetailResponse toCustomerDetail(User u, CustomerProfile p, List<MeasurementsResponse> ms) {
+    private CustomerDetailResponse toCustomerDetail(User u, CustomerProfile p,
+                                                    List<MeasurementsResponse> ms) {
         return new CustomerDetailResponse(
                 u.getId(), u.getEmail(), u.getFirstName(), u.getLastName(),
-                u.getPhone(), u.getIsActive(), u.getCreatedAt(),
+                u.getPhone(), u.isActive(), u.getCreatedAt(),
                 p.getAdminNotes(),
                 p.getDesignImageUrls() != null ? p.getDesignImageUrls() : new ArrayList<>(),
                 ms
