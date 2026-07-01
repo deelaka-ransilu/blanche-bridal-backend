@@ -44,7 +44,7 @@ public class AppointmentController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> getAllAppointments(
             @RequestParam(required = false) AppointmentStatus status,
             @RequestParam(defaultValue = "0") int page,
@@ -91,7 +91,7 @@ public class AppointmentController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> getAppointmentById(
             @PathVariable UUID id,
             @RequestHeader("Authorization") String authHeader) {
@@ -119,7 +119,7 @@ public class AppointmentController {
     }
 
     @PutMapping("/{id}/confirm")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> confirmAppointment(
             @PathVariable UUID id) {
 
@@ -131,7 +131,7 @@ public class AppointmentController {
     }
 
     @PutMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> cancelAppointment(
             @PathVariable UUID id,
             @RequestHeader("Authorization") String authHeader) {
@@ -147,7 +147,7 @@ public class AppointmentController {
     }
 
     @PutMapping("/{id}/reschedule")
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN')")
     public ResponseEntity<Map<String, Object>> rescheduleAppointment(
             @PathVariable UUID id,
             @RequestHeader("Authorization") String authHeader,
@@ -164,7 +164,7 @@ public class AppointmentController {
     }
 
     @PutMapping("/{id}/complete")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> completeAppointment(
             @PathVariable UUID id) {
 

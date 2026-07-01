@@ -34,7 +34,7 @@ public class RentalController {
 
     // ADMIN + EMPLOYEE — all rentals, optional status filter
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> getAllRentals(
             @RequestParam(required = false) RentalStatus status,
             @RequestParam(defaultValue = "0") int page,
@@ -71,7 +71,7 @@ public class RentalController {
 
     // CUSTOMER (own) + ADMIN + EMPLOYEE
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> getRentalById(
             @PathVariable UUID id,
             @RequestHeader("Authorization") String authHeader) {
@@ -86,7 +86,7 @@ public class RentalController {
 
     // ADMIN + EMPLOYEE — create rental on behalf of customer
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> createRental(
             @Valid @RequestBody CreateRentalRequest request) {
 
@@ -101,7 +101,7 @@ public class RentalController {
 
     // ADMIN + EMPLOYEE — mark as returned
     @PutMapping("/{id}/return")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> markReturned(
             @PathVariable UUID id,
             @Valid @RequestBody MarkReturnedRequest request) {
@@ -116,7 +116,7 @@ public class RentalController {
 
     // ADMIN only — update balance due
     @PutMapping("/{id}/balance")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> updateBalance(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateBalanceRequest request) {

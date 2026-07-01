@@ -105,7 +105,7 @@ public class ReceiptServiceImpl implements ReceiptService {
                         "Receipt not found: " + receiptId));
 
         boolean isAdminOrEmployee =
-                "ADMIN".equals(role) || "EMPLOYEE".equals(role) || "SUPERADMIN".equals(role);
+                "ADMIN".equals(role) || "EMPLOYEE".equals(role);
 
         if (!isAdminOrEmployee) {
             UUID ownerUserId = receipt.getOrder().getUser().getId();

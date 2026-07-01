@@ -88,7 +88,7 @@ public class ProductController {
     // ── Admin only ────────────────────────────────────────────────────────────
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> create(
             @Valid @RequestBody CreateProductRequest request) {
         log.info("[Product] Create → name: {}, type: {}", request.name(), request.type());
@@ -97,7 +97,7 @@ public class ProductController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> update(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateProductRequest request) {
@@ -107,7 +107,7 @@ public class ProductController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> delete(@PathVariable UUID id) {
         log.info("[Product] Deactivate → id: {}", id);
         productService.deleteProduct(id);
@@ -115,7 +115,7 @@ public class ProductController {
     }
 
     @PutMapping("/{id}/stock")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> updateStock(
             @PathVariable UUID id,
             @RequestParam int quantity) {
@@ -126,7 +126,7 @@ public class ProductController {
 
     // ── NEW: GET /api/products/deleted ────────────────────────────────────────
     @GetMapping("/deleted")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> getDeleted() {
         log.info("[Product] Fetching deleted products");
         List<ProductSummaryResponse> deleted = productService.getDeletedProducts();
@@ -135,7 +135,7 @@ public class ProductController {
 
     // ── NEW: PUT /api/products/{id}/restore ───────────────────────────────────
     @PutMapping("/{id}/restore")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> restore(@PathVariable UUID id) {
         log.info("[Product] Restore → id: {}", id);
         return ResponseEntity.ok(Map.of("success", true,
@@ -164,7 +164,7 @@ public class ProductController {
     }
 
     @DeleteMapping("/{id}/images/{imageId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> deleteImage(
             @PathVariable UUID id,
             @PathVariable UUID imageId) {

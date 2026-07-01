@@ -39,7 +39,7 @@ public class CategoryController {
 
     // Admin only
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> create(
             @Valid @RequestBody CreateCategoryRequest request) {
 
@@ -50,7 +50,7 @@ public class CategoryController {
 
     // Admin only
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> update(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateCategoryRequest request) {
@@ -62,7 +62,7 @@ public class CategoryController {
 
     // Admin only
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> delete(@PathVariable UUID id) {
         log.info("[Category] Deactivate request — id: {}", id);
         categoryService.deleteCategory(id);
@@ -71,7 +71,7 @@ public class CategoryController {
 
     // GET /api/categories/deleted
     @GetMapping("/deleted")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> getDeleted() {
         return ResponseEntity.ok(Map.of("success", true,
                 "data", categoryService.getDeletedCategories()));
@@ -79,7 +79,7 @@ public class CategoryController {
 
     // PUT /api/categories/{id}/restore
     @PutMapping("/{id}/restore")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> restore(@PathVariable UUID id) {
         log.info("[Category] Restore → id: {}", id);
         return ResponseEntity.ok(Map.of("success", true,

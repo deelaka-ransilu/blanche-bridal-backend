@@ -59,7 +59,7 @@ public class UserController {
 
     // POST /api/users/{customerId}/measurements — admin records for a customer
     @PostMapping("/{customerId}/measurements")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> recordMeasurements(
             @RequestHeader("Authorization") String authHeader,
             @PathVariable UUID customerId,
@@ -74,7 +74,7 @@ public class UserController {
 
     // GET /api/users/{customerId}/measurements — admin views customer history
     @GetMapping("/{customerId}/measurements")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> getCustomerMeasurements(
             @PathVariable UUID customerId) {
 

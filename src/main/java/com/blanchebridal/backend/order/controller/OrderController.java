@@ -33,7 +33,7 @@ public class OrderController {
     private final JwtUtil jwtUtil;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> getAllOrders(
             @RequestParam(required = false) OrderStatus status,
             @RequestParam(defaultValue = "0") int page,
@@ -80,7 +80,7 @@ public class OrderController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> getOrderById(
             @PathVariable UUID id,
             @RequestHeader("Authorization") String authHeader) {
@@ -105,7 +105,7 @@ public class OrderController {
     }
 
     @PutMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> updateOrderStatus(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateOrderStatusRequest request) {
