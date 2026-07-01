@@ -80,11 +80,8 @@ public class AuthServiceImpl implements AuthService {
         userRepository.save(user);
         sendVerificationToken(user);
         log.info("[Auth] New customer registered: {} <{}>", user.getFirstName(), user.getEmail());
-        String accessToken = jwtUtil.generateToken(user);
-        String refreshToken = issueRefreshToken(user);
-        return new AuthResponse(accessToken, user.getRole().name(), refreshToken);
+        return new AuthResponse(null, null, null);
     }
-
     @Override
     public AuthResponse login(LoginRequest request) {
         User user = userRepository.findByEmail(request.email())
@@ -146,7 +143,7 @@ public class AuthServiceImpl implements AuthService {
                             .googleId(googleId)
                             .firstName(firstName != null ? firstName : "")
                             .lastName(lastName   != null ? lastName  : "")
-                            .phone("")   // Google accounts have no phone — must update profile later
+                            .phone("google_" + googleId)
                             .role(UserRole.CUSTOMER)
                             // status defaults to PENDING_VERIFICATION
                             .build())
@@ -160,10 +157,7 @@ public class AuthServiceImpl implements AuthService {
             if (isNewUser) {
                 sendVerificationToken(user);
                 log.info("[Auth] New Google account registered: {} <{}>", user.getFirstName(), email);
-
-                String accessToken = jwtUtil.generateToken(user);
-                String refreshToken = issueRefreshToken(user);
-                return new AuthResponse(accessToken, user.getRole().name(), refreshToken);
+                return new AuthResponse(null, null, null);
             }
 
             if (user.isPendingVerification()) {
@@ -355,7 +349,7 @@ public class AuthServiceImpl implements AuthService {
                 .user(user)
                 .token(tokenString)
                 .type(VerificationTokenType.EMAIL_VERIFY)
-                .expiresAt(LocalDateTime.now().plusMinutes(20))
+                .expiresAt(LocalDateTime.now().plusHours(24))
                 .build();
         tokenRepository.save(vToken);
         emailService.sendVerificationEmail(user.getEmail(), tokenString);
