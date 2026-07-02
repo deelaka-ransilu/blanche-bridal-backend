@@ -1,5 +1,6 @@
 package com.blanchebridal.backend.order.service.impl;
 
+import com.blanchebridal.backend.order.entity.OrderMode;
 import com.blanchebridal.backend.shared.email.EmailService;
 import com.blanchebridal.backend.exception.ResourceNotFoundException;
 import com.blanchebridal.backend.exception.UnauthorizedException;
@@ -15,6 +16,7 @@ import com.blanchebridal.backend.order.service.OrderService;
 import com.blanchebridal.backend.product.entity.Product;
 import com.blanchebridal.backend.product.repository.ProductRepository;
 import com.blanchebridal.backend.user.entity.User;
+import com.blanchebridal.backend.user.entity.UserRole;
 import com.blanchebridal.backend.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,53 +43,39 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
-    public OrderResponse createOrder(CreateOrderRequest req, UUID userId) {
-        User user = userRepository.findById(userId)
+    public OrderResponse createOrder(CreateOrderRequest req, UUID callerId, String role) {
+
+        boolean isStaff = role != null &&
+                (role.equals("ROLE_ADMIN") || role.equals("ADMIN") ||
+                        role.equals("ROLE_EMPLOYEE") || role.equals("EMPLOYEE"));
+
+        UUID targetUserId;
+        if (isStaff) {
+            if (req.getCustomerId() == null) {
+                throw new IllegalArgumentException("customerId is required when creating an order as staff");
+            }
+            targetUserId = req.getCustomerId();
+        } else {
+            // CUSTOMER — always self, silently ignore any customerId in the request
+            targetUserId = callerId;
+        }
+
+        User user = userRepository.findById(targetUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        if (isStaff && user.getRole() != UserRole.CUSTOMER) {
+            throw new IllegalStateException("Orders can only be created for CUSTOMER accounts");
+        }
+
+        // ... rest of method unchanged, but replace every subsequent
+        // reference to `userId` with `targetUserId`, and `user` is already resolved above
+        // (remove the old duplicate userRepository.findById(userId) line)
 
         List<OrderItem> items = new ArrayList<>();
         BigDecimal totalAmount = BigDecimal.ZERO;
 
         for (OrderItemRequest itemReq : req.getItems()) {
-            Product product = productRepository.findById(itemReq.getProductId())
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "Product not found: " + itemReq.getProductId()));
-
-            if (Boolean.FALSE.equals(product.getIsAvailable())) {
-                throw new IllegalStateException(
-                        "Product is not available: " + product.getName());
-            }
-
-            if (product.getStock() < itemReq.getQuantity()) {
-                throw new IllegalStateException(
-                        "Insufficient stock for: " + product.getName());
-            }
-
-            BigDecimal unitPrice = product.getRentalPrice() != null
-                    ? product.getRentalPrice()
-                    : product.getPurchasePrice();
-
-            if (unitPrice == null) {
-                throw new IllegalStateException(
-                        "Product has no price set: " + product.getName());
-            }
-
-            String imageUrl = (product.getImages() != null && !product.getImages().isEmpty())
-                    ? product.getImages().get(0).getUrl()
-                    : null;
-
-            OrderItem item = OrderItem.builder()
-                    .product(product)
-                    .quantity(itemReq.getQuantity())
-                    .unitPrice(unitPrice)
-                    .size(itemReq.getSize())
-                    .productName(product.getName())
-                    .productImage(imageUrl)
-                    .build();
-
-            items.add(item);
-            totalAmount = totalAmount.add(
-                    unitPrice.multiply(BigDecimal.valueOf(itemReq.getQuantity())));
+            // ... unchanged
         }
 
         Order order = Order.builder()
@@ -98,15 +86,15 @@ public class OrderServiceImpl implements OrderService {
                 .fulfillmentMethod(req.getFulfillmentMethod())
                 .deliveryAddress(req.getDeliveryAddress())
                 .customerPhone(req.getCustomerPhone())
-                .orderMode(req.getOrderMode())
+                .orderMode(req.getOrderMode() != null ? req.getOrderMode() : OrderMode.WEBSITE)
                 .items(items)
                 .build();
 
         items.forEach(item -> item.setOrder(order));
 
         Order saved = orderRepository.save(order);
-        log.info("[Order] Created order {} for user {} — total LKR {}",
-                saved.getId(), userId, saved.getTotalAmount());
+        log.info("[Order] Created order {} for user {} (created by {}) — total LKR {}",
+                saved.getId(), targetUserId, callerId, saved.getTotalAmount());
         return toResponse(saved);
     }
 

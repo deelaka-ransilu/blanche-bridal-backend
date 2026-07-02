@@ -16,6 +16,13 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataIntegrityViolation(
+            org.springframework.dao.DataIntegrityViolationException ex) {
+        return buildError("CONFLICT", "This action conflicts with existing data", HttpStatus.CONFLICT);
+    }
+
+
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleNotFound(ResourceNotFoundException ex) {
         return buildError("RESOURCE_NOT_FOUND", ex.getMessage(), HttpStatus.NOT_FOUND);
@@ -83,6 +90,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Map<String, Object>> handleIllegalState(IllegalStateException ex) {
         return buildError("BUSINESS_RULE_VIOLATION", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    // IllegalArgumentException — NEW. Previously had no handler and fell through to the
+    // generic Exception handler, incorrectly returning 500 for what is really bad client
+    // input (e.g. missing required field in a staff-only code path). Mirrors the
+    // IllegalStateException handler below.
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalArgument(IllegalArgumentException ex) {
+        return buildError("BAD_REQUEST", ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
 
     private ResponseEntity<Map<String, Object>> buildError(

@@ -49,29 +49,43 @@ public class JwtFilter extends OncePerRequestFilter {
         }
 
         String email = jwtUtil.extractEmail(token);
-        String role  = jwtUtil.extractRole(token);
+        String role = jwtUtil.extractRole(token);
 
         if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-            userRepository.findByEmail(email).ifPresent(user -> {
+            java.util.Optional<User> userOpt = userRepository.findByEmail(email);
 
-                // Extra guard: reject tokens for INACTIVE users even if token is valid
-                // (e.g. admin deactivated the account after the token was issued)
-                if (!user.isActive()) {
-                    log.warn("[JwtFilter] Rejected token for inactive user: {}", email);
-                    return;
-                }
+            if (userOpt.isEmpty()) {
+                log.warn("[JwtFilter] User not found: {}", email);
+                // User not found - send 403
+                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                response.setContentType("application/json");
+                response.getWriter().write("{\"success\":false,\"message\":\"User not found\"}");
+                return;  // Stop the filter chain
+            }
 
-                UsernamePasswordAuthenticationToken authentication =
-                        new UsernamePasswordAuthenticationToken(
-                                user,
-                                null,
-                                List.of(new SimpleGrantedAuthority("ROLE_" + role))
-                        );
-                authentication.setDetails(
-                        new WebAuthenticationDetailsSource().buildDetails(request)
-                );
-                SecurityContextHolder.getContext().setAuthentication(authentication);
-            });
+            User user = userOpt.get();
+
+            // Extra guard: reject tokens for INACTIVE users even if token is valid
+            if (!user.isActive()) {
+                log.warn("[JwtFilter] Rejected token for inactive user: {}", email);
+                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                response.setContentType("application/json");
+                response.getWriter().write("{\"success\":false,\"message\":\"Account is inactive. Please contact an administrator.\"}");
+                return;  // Stop the filter chain
+            }
+
+            log.info("[JwtFilter] Authenticated user: {} with role: {}", email, role);
+
+            UsernamePasswordAuthenticationToken authentication =
+                    new UsernamePasswordAuthenticationToken(
+                            user,
+                            null,
+                            List.of(new SimpleGrantedAuthority("ROLE_" + role))
+                    );
+            authentication.setDetails(
+                    new WebAuthenticationDetailsSource().buildDetails(request)
+            );
+            SecurityContextHolder.getContext().setAuthentication(authentication);
         }
 
         filterChain.doFilter(request, response);

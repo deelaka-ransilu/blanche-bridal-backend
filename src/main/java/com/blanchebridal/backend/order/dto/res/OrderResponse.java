@@ -1,5 +1,6 @@
 package com.blanchebridal.backend.order.dto.res;
 
+import com.blanchebridal.backend.order.entity.OrderMode;
 import com.blanchebridal.backend.order.entity.OrderStatus;
 import lombok.Builder;
 import lombok.Data;
@@ -25,5 +26,5 @@ public class OrderResponse {
     private String customerPhone;
     private String fulfillmentMethod;
     private String deliveryAddress;
-    private String orderMode;
+    private OrderMode orderMode;
 }

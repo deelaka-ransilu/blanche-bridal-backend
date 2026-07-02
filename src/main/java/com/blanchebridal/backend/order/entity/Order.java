@@ -18,7 +18,7 @@ import java.util.UUID;
 public class Order {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -46,8 +46,9 @@ public class Order {
     @Column(name = "customer_phone", length = 20)
     private String customerPhone;
 
-    @Column(name = "order_mode", length = 10)
-    private String orderMode;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "order_mode", nullable = false, length = 10)
+    private OrderMode orderMode = OrderMode.WEBSITE;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @ToString.Exclude

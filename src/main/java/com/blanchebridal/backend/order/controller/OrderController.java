@@ -92,16 +92,17 @@ public class OrderController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('CUSTOMER')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> createOrder(
             @RequestHeader("Authorization") String authHeader,
             @Valid @RequestBody CreateOrderRequest request) {
 
-        UUID userId = extractUserId(authHeader);
-        log.info("[Order] Create request — user: {}, items: {}",
-                userId, request.getItems() != null ? request.getItems().size() : 0);
+        UUID callerId = extractUserId(authHeader);
+        String role = extractRole();
+        log.info("[Order] Create request — caller: {}, role: {}, items: {}",
+                callerId, role, request.getItems() != null ? request.getItems().size() : 0);
         return ResponseEntity.ok(Map.of("success", true,
-                "data", orderService.createOrder(request, userId)));
+                "data", orderService.createOrder(request, callerId, role)));
     }
 
     @PutMapping("/{id}/status")
