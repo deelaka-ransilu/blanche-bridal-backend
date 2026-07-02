@@ -7,9 +7,11 @@ import com.blanchebridal.backend.product.dto.req.CreateProductRequest;
 import com.blanchebridal.backend.product.dto.req.CreateReviewRequest;
 import com.blanchebridal.backend.product.dto.req.UpdateProductRequest;
 import com.blanchebridal.backend.product.dto.res.ProductSummaryResponse;
+import com.blanchebridal.backend.product.dto.res.UploadSignatureResponse;
 import com.blanchebridal.backend.product.entity.ProductType;
 import com.blanchebridal.backend.product.service.ProductService;
 import com.blanchebridal.backend.product.service.ReviewService;
+import com.cloudinary.Cloudinary;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +37,7 @@ public class ProductController {
     private final ProductService productService;
     private final ReviewService reviewService;
     private final JwtUtil jwtUtil;
+     private final Cloudinary cloudinary;
 
     // ── Public ────────────────────────────────────────────────────────────────
 
@@ -171,6 +174,30 @@ public class ProductController {
         log.info("[Product] Image delete → product: {}, image: {}", id, imageId);
         productService.deleteProductImage(id, imageId);
         return ResponseEntity.ok(Map.of("success", true, "data", "Image removed"));
+    }
+
+    @GetMapping("/upload-signature")
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    public ResponseEntity<Map<String, Object>> getUploadSignature() {
+        long timestamp = System.currentTimeMillis() / 1000L;
+        String folder = "blanche-bridal/products";
+
+        Map<String, Object> paramsToSign = Map.of(
+                "timestamp", timestamp,
+                "folder", folder
+        );
+
+        String signature = cloudinary.apiSignRequest(paramsToSign, cloudinary.config.apiSecret);
+
+        UploadSignatureResponse response = new UploadSignatureResponse(
+                signature,
+                timestamp,
+                cloudinary.config.apiKey,
+                cloudinary.config.cloudName,
+                folder
+        );
+
+        return ResponseEntity.ok(Map.of("success", true, "data", response));
     }
 
     // ── Helper ────────────────────────────────────────────────────────────────
