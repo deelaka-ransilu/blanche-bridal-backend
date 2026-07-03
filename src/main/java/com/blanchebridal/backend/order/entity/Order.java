@@ -1,5 +1,6 @@
 package com.blanchebridal.backend.order.entity;
 
+import com.blanchebridal.backend.payment.entity.PaymentMethod;
 import com.blanchebridal.backend.user.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -62,4 +63,9 @@ public class Order {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_method", nullable = false, length = 20)
+    @Builder.Default
+    private PaymentMethod paymentMethod = PaymentMethod.PAYHERE;
 }

@@ -54,6 +54,11 @@ public class PaymentServiceImpl implements PaymentService {
             throw new UnauthorizedException("Access denied to this order");
         }
 
+        if (order.getPaymentMethod() == PaymentMethod.CASH) {
+            throw new IllegalStateException(
+                    "This order uses cash payment — use the confirm-cash endpoint instead");
+        }
+
         if (order.getStatus() != OrderStatus.PENDING) {
             throw new IllegalStateException(
                     "Order cannot be paid — current status: " + order.getStatus());
@@ -155,7 +160,9 @@ public class PaymentServiceImpl implements PaymentService {
             log.info("Payment COMPLETED for order {}. PayHere ID: {}", orderId, payherePaymentId);
 
             // Deduct stock now that payment is confirmed.
-            // This is the ONLY place stock is reduced — createOrder() does not touch stock.
+            // This is the ONLY place stock is reduced for PayHere orders —
+            // createOrder() does not touch stock. See confirmCashPayment() for
+            // the equivalent cash-flow stock deduction.
             if (order.getItems() != null) {
                 for (OrderItem item : order.getItems()) {
                     Product product = item.getProduct();
@@ -172,6 +179,62 @@ public class PaymentServiceImpl implements PaymentService {
             receiptService.generateReceipt(order, payment);
 
         }, () -> log.warn("Webhook received for unknown payhereOrderId: {}", orderId));
+    }
+
+    @Override
+    @Transactional
+    public PaymentStatusResponse confirmCashPayment(UUID orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
+
+        if (order.getPaymentMethod() != PaymentMethod.CASH) {
+            throw new IllegalStateException("Order is not set up for cash payment");
+        }
+
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new IllegalStateException(
+                    "Order cannot be confirmed — current status: " + order.getStatus());
+        }
+
+        Payment payment = paymentRepository.findByOrder_Id(orderId)
+                .orElseGet(() -> Payment.builder()
+                        .order(order)
+                        .amount(order.getTotalAmount())
+                        .method(PaymentMethod.CASH)
+                        .status(PaymentStatus.PENDING)
+                        .build());
+
+        // Guard against double-confirmation, mirroring handleWebhook()'s duplicate guard
+        if (payment.getStatus() == PaymentStatus.COMPLETED) {
+            log.info("[Payment] Cash payment already confirmed for order {}. Ignoring.", orderId);
+            return PaymentStatusResponse.builder().status(PaymentStatus.COMPLETED.name()).build();
+        }
+
+        payment.setStatus(PaymentStatus.COMPLETED);
+        payment.setPaidAt(LocalDateTime.now());
+        paymentRepository.save(payment);
+
+        order.setStatus(OrderStatus.CONFIRMED);
+        orderRepository.save(order);
+
+        log.info("[Payment] Cash payment CONFIRMED for order {}", orderId);
+
+        if (order.getItems() != null) {
+            for (OrderItem item : order.getItems()) {
+                Product product = item.getProduct();
+                if (product != null) {
+                    int newStock = Math.max(0, product.getStock() - item.getQuantity());
+                    product.setStock(newStock);
+                    productRepository.save(product);
+                    log.info("[Stock] Reduced stock for product {} ('{}') by {}. New stock: {}",
+                            product.getId(), product.getName(), item.getQuantity(), newStock);
+                }
+            }
+        }
+
+        receiptService.generateReceipt(order, payment);
+
+        return PaymentStatusResponse.builder().status(PaymentStatus.COMPLETED.name()).build();
     }
 
     @Override

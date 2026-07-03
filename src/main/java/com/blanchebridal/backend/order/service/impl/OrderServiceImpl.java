@@ -1,6 +1,7 @@
 package com.blanchebridal.backend.order.service.impl;
 
 import com.blanchebridal.backend.order.entity.OrderMode;
+import com.blanchebridal.backend.payment.entity.PaymentMethod;
 import com.blanchebridal.backend.shared.email.EmailService;
 import com.blanchebridal.backend.exception.ResourceNotFoundException;
 import com.blanchebridal.backend.exception.UnauthorizedException;
@@ -67,6 +68,19 @@ public class OrderServiceImpl implements OrderService {
             throw new IllegalStateException("Orders can only be created for CUSTOMER accounts");
         }
 
+        // ── Payment method resolution ───────────────────────────────────────
+        // Defaults to PAYHERE if omitted. CARD is already rejected at the DTO
+        // validation layer (CreateOrderRequest.isPaymentMethodValid), so only
+        // PAYHERE/CASH reach here.
+        PaymentMethod paymentMethod = req.getPaymentMethod() != null
+                ? req.getPaymentMethod()
+                : PaymentMethod.PAYHERE;
+
+        if (paymentMethod == PaymentMethod.CASH && !isStaff) {
+            throw new IllegalStateException(
+                    "Cash payment is only available for staff-assisted orders");
+        }
+
         // ... rest of method unchanged, but replace every subsequent
         // reference to `userId` with `targetUserId`, and `user` is already resolved above
         // (remove the old duplicate userRepository.findById(userId) line)
@@ -75,7 +89,8 @@ public class OrderServiceImpl implements OrderService {
         BigDecimal totalAmount = BigDecimal.ZERO;
 
         for (OrderItemRequest itemReq : req.getItems()) {
-            // ... unchanged
+            // ... unchanged — this loop's contents were not shown to me.
+            // DO NOT let this comment overwrite your real loop body when merging.
         }
 
         Order order = Order.builder()
@@ -87,14 +102,15 @@ public class OrderServiceImpl implements OrderService {
                 .deliveryAddress(req.getDeliveryAddress())
                 .customerPhone(req.getCustomerPhone())
                 .orderMode(req.getOrderMode() != null ? req.getOrderMode() : OrderMode.WEBSITE)
+                .paymentMethod(paymentMethod)
                 .items(items)
                 .build();
 
         items.forEach(item -> item.setOrder(order));
 
         Order saved = orderRepository.save(order);
-        log.info("[Order] Created order {} for user {} (created by {}) — total LKR {}",
-                saved.getId(), targetUserId, callerId, saved.getTotalAmount());
+        log.info("[Order] Created order {} for user {} (created by {}) — total LKR {} — payment method {}",
+                saved.getId(), targetUserId, callerId, saved.getTotalAmount(), paymentMethod);
         return toResponse(saved);
     }
 
