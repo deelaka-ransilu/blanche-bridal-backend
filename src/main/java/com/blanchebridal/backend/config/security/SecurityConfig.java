@@ -51,7 +51,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 org.springframework.http.HttpMethod.GET,
                                 "/api/products/**",
-                                "/api/categories/**"
+                                "/api/categories/**",
+                                "/api/appointments/slots"
                         ).permitAll()
                         // PayHere webhook — must be public (PayHere calls this server-to-server)
                         .requestMatchers("/api/payments/notify").permitAll()

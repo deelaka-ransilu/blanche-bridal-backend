@@ -147,7 +147,7 @@ public class AppointmentController {
     }
 
     @PutMapping("/{id}/reschedule")
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> rescheduleAppointment(
             @PathVariable UUID id,
             @RequestHeader("Authorization") String authHeader,
