@@ -13,5 +13,4 @@ public class CreateProductionRecordRequest {
     private ProductionStage initialStage;
     private UUID assignedEmployeeId; // optional at creation
     private String notes;
-    // getters/setters
 }
