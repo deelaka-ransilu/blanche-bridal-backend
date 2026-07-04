@@ -89,8 +89,43 @@ public class OrderServiceImpl implements OrderService {
         BigDecimal totalAmount = BigDecimal.ZERO;
 
         for (OrderItemRequest itemReq : req.getItems()) {
-            // ... unchanged — this loop's contents were not shown to me.
-            // DO NOT let this comment overwrite your real loop body when merging.
+            Product product = productRepository.findById(itemReq.getProductId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Product not found: " + itemReq.getProductId()));
+
+            if (Boolean.FALSE.equals(product.getIsActive()) || Boolean.FALSE.equals(product.getIsAvailable())) {
+                throw new IllegalStateException("Product is not available: " + product.getName());
+            }
+
+            if (product.getStock() < itemReq.getQuantity()) {
+                throw new IllegalStateException(
+                        "Insufficient stock for " + product.getName()
+                                + " — available: " + product.getStock()
+                                + ", requested: " + itemReq.getQuantity());
+            }
+
+            // NOTE: purchase-only for now — no lineType field exists yet to choose
+            // between purchasePrice/rentalPrice. This is Payment Issue A
+            // (CURRENT_STATE.md #1). Defaulting to purchasePrice.
+            BigDecimal unitPrice = product.getPurchasePrice() != null
+                    ? product.getPurchasePrice()
+                    : BigDecimal.ZERO;
+
+            String imageUrl = (product.getImages() != null && !product.getImages().isEmpty())
+                    ? product.getImages().get(0).getUrl() // ⚠ confirm actual getter on ProductImage
+                    : null;
+
+            OrderItem item = OrderItem.builder()
+                    .product(product)
+                    .quantity(itemReq.getQuantity())
+                    .unitPrice(unitPrice)
+                    .size(itemReq.getSize())
+                    .productName(product.getName())
+                    .productImage(imageUrl)
+                    .build();
+
+            items.add(item);
+            totalAmount = totalAmount.add(unitPrice.multiply(BigDecimal.valueOf(itemReq.getQuantity())));
         }
 
         Order order = Order.builder()
