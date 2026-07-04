@@ -78,7 +78,7 @@ public class ProductionStageRecordController {
     public ResponseEntity<ProductionStageRecordResponse> getForCustomer(
             @PathVariable UUID orderId,
             @AuthenticationPrincipal User customer) {
-        return productionService.getForCustomer(orderId, customer.getId())
+        return productionService.getForCustomer(orderId, customer)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }

@@ -2,6 +2,7 @@ package com.blanchebridal.backend.order.service;
 
 import com.blanchebridal.backend.order.dto.req.*;
 import com.blanchebridal.backend.order.dto.res.ProductionStageRecordResponse;
+import com.blanchebridal.backend.user.entity.User;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -20,5 +21,5 @@ public interface ProductionStageRecordService {
 
     ProductionStageRecordResponse assignEmployee(UUID orderId, AssignEmployeeRequest req, UUID adminId);
 
-    Optional<ProductionStageRecordResponse> getForCustomer(UUID orderId, UUID customerId);
+    Optional<ProductionStageRecordResponse> getForCustomer(UUID orderId, User requester);
 }

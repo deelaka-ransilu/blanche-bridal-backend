@@ -132,9 +132,13 @@ public class ProductionStageRecordServiceImpl implements ProductionStageRecordSe
     }
 
     @Override
-    public Optional<ProductionStageRecordResponse> getForCustomer(UUID orderId, UUID customerId) {
+    public Optional<ProductionStageRecordResponse> getForCustomer(UUID orderId, User requester) {
         return recordRepository.findByOrderId(orderId)
-                .filter(record -> record.getOrder().getUser().getId().equals(customerId))
+                .filter(record ->
+                        requester.getRole() == UserRole.ADMIN
+                                || requester.getRole() == UserRole.EMPLOYEE
+                                || record.getOrder().getUser().getId().equals(requester.getId())
+                )
                 .map(this::toResponse);
     }
 
