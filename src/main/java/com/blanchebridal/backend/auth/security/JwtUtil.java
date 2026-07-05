@@ -36,16 +36,26 @@ public class JwtUtil {
                 .compact();
     }
 
+    /**
+     * Validates the token's signature and structure.
+     *
+     * IMPORTANT: this no longer swallows ExpiredJwtException — it now
+     * propagates to the caller (JwtFilter), which needs to distinguish
+     * "expired" (→ 401, triggers client-side refresh) from "malformed/
+     * tampered" (→ pass-through, eventual 403 via SecurityConfig). See
+     * CURRENT_STATE.md Issue #8.
+     *
+     * Any other parsing failure (bad signature, malformed compact string,
+     * unsupported token, illegal argument) still throws — callers that only
+     * care about a boolean should catch broadly themselves; JwtFilter now
+     * does that catch explicitly instead of this method doing it silently.
+     */
     public boolean validateToken(String token) {
-        try {
-            Jwts.parser()
-                    .verifyWith(signingKey)
-                    .build()
-                    .parseSignedClaims(token);
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
+        Jwts.parser()
+                .verifyWith(signingKey)
+                .build()
+                .parseSignedClaims(token);
+        return true;
     }
 
     public String extractEmail(String token) {

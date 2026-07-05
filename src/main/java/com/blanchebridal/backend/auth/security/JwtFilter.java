@@ -2,6 +2,7 @@ package com.blanchebridal.backend.auth.security;
 
 import com.blanchebridal.backend.user.entity.User;
 import com.blanchebridal.backend.user.repository.UserRepository;
+import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -41,8 +42,37 @@ public class JwtFilter extends OncePerRequestFilter {
 
         String token = authHeader.substring(7);
 
-        if (!jwtUtil.validateToken(token)) {
-            // Token present but invalid — pass through, SecurityConfig
+        // NEW: distinguish expired tokens (→ 401, client should refresh)
+        // from malformed/tampered tokens (→ pass through, SecurityConfig
+        // ultimately rejects with 403 as before). Previously
+        // jwtUtil.validateToken() swallowed ExpiredJwtException and
+        // returned false for everything, so expired and malformed tokens
+        // were indistinguishable — both fell through to an anonymous
+        // principal and eventually a 403 AccessDeniedException, so the
+        // frontend's refresh-on-401 logic never fired. See
+        // CURRENT_STATE.md Issue #8.
+        boolean valid;
+        boolean expired = false;
+        try {
+            valid = jwtUtil.validateToken(token);
+        } catch (ExpiredJwtException e) {
+            valid = false;
+            expired = true;
+        } catch (Exception e) {
+            // Malformed, unsupported, bad signature, illegal argument, etc.
+            valid = false;
+        }
+
+        if (!valid) {
+            if (expired) {
+                log.info("[JwtFilter] Expired token — returning 401 for client-side refresh");
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("application/json");
+                response.getWriter().write(
+                        "{\"success\":false,\"message\":\"Token expired\",\"error\":\"TOKEN_EXPIRED\"}");
+                return;
+            }
+            // Malformed/tampered token — pass through, SecurityConfig
             // will reject if the route needs authentication
             filterChain.doFilter(request, response);
             return;
@@ -56,22 +86,20 @@ public class JwtFilter extends OncePerRequestFilter {
 
             if (userOpt.isEmpty()) {
                 log.warn("[JwtFilter] User not found: {}", email);
-                // User not found - send 403
                 response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                 response.setContentType("application/json");
                 response.getWriter().write("{\"success\":false,\"message\":\"User not found\"}");
-                return;  // Stop the filter chain
+                return;
             }
 
             User user = userOpt.get();
 
-            // Extra guard: reject tokens for INACTIVE users even if token is valid
             if (!user.isActive()) {
                 log.warn("[JwtFilter] Rejected token for inactive user: {}", email);
                 response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                 response.setContentType("application/json");
                 response.getWriter().write("{\"success\":false,\"message\":\"Account is inactive. Please contact an administrator.\"}");
-                return;  // Stop the filter chain
+                return;
             }
 
             log.info("[JwtFilter] Authenticated user: {} with role: {}", email, role);

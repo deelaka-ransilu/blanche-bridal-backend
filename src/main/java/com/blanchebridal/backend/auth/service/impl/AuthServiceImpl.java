@@ -272,7 +272,6 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new UnauthorizedException("Invalid refresh token"));
 
         if (!stored.isValid()) {
-            // Token expired or revoked — delete it and force re-login
             refreshTokenRepository.delete(stored);
             throw new UnauthorizedException("Refresh token expired. Please log in again.");
         }
@@ -283,13 +282,13 @@ public class AuthServiceImpl implements AuthService {
             throw new UnauthorizedException("Account is inactive.");
         }
 
-        // Rotate: delete old, issue new
+        // Rotate: delete old, issue new — capture the raw value this time
         refreshTokenRepository.delete(stored);
-        issueRefreshToken(user); // new one stored in DB
+        String newRawRefreshToken = issueRefreshToken(user);
 
         String newAccessToken = jwtUtil.generateToken(user);
         log.info("[Auth] Token refreshed for {}", user.getEmail());
-        return new RefreshResponse(newAccessToken);
+        return new RefreshResponse(newAccessToken, newRawRefreshToken);
     }
 
     @Override

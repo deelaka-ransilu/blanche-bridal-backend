@@ -118,6 +118,7 @@ public class AuthController {
                     "No refresh token provided");
         }
         RefreshResponse refreshResponse = authService.refresh(raw);
+        setRefreshTokenCookie(response, refreshResponse.refreshToken());
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "data", Map.of("token", refreshResponse.accessToken())
@@ -143,7 +144,7 @@ public class AuthController {
         Cookie cookie = new Cookie("refreshToken", rawToken);
         cookie.setHttpOnly(true);   // JS cannot read this — XSS protection
         cookie.setSecure(false);    // Set true in production (HTTPS only)
-        cookie.setPath("/api/auth");
+        cookie.setPath("/");
         cookie.setMaxAge(7 * 24 * 60 * 60); // 7 days in seconds
         response.addCookie(cookie);
     }
@@ -152,7 +153,7 @@ public class AuthController {
         Cookie cookie = new Cookie("refreshToken", "");
         cookie.setHttpOnly(true);
         cookie.setSecure(false);
-        cookie.setPath("/api/auth");
+        cookie.setPath("/");
         cookie.setMaxAge(0); // delete immediately
         response.addCookie(cookie);
     }
