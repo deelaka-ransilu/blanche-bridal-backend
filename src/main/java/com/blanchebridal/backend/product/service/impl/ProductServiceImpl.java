@@ -47,6 +47,7 @@ public class ProductServiceImpl implements ProductService {
     private final Cloudinary cloudinary;
 
     @Override
+    @Transactional(readOnly = true)
     public Page<ProductSummaryResponse> getProducts(ProductFilters filters, Pageable pageable) {
         return productRepository
                 .findAll(ProductSpecification.withFilters(filters), pageable)
