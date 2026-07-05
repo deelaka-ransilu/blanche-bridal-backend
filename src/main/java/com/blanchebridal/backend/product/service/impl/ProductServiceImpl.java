@@ -55,11 +55,13 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public ProductDetailResponse getProductById(UUID id) {
         return toDetail(findActiveById(id));
     }
 
     @Override
+    @Transactional(readOnly = true)
     public ProductDetailResponse getProductBySlug(String slug) {
         Product product = productRepository.findBySlugAndIsActiveTrue(slug)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + slug));
@@ -169,6 +171,7 @@ public class ProductServiceImpl implements ProductService {
 
     // ── NEW: get all deleted (inactive) products ──────────────────────────────
     @Override
+    @Transactional(readOnly = true)
     public List<ProductSummaryResponse> getDeletedProducts() {
         return productRepository.findByIsActiveFalse()
                 .stream()

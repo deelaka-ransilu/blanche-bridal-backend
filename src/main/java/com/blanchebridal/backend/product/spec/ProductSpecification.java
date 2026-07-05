@@ -2,11 +2,15 @@ package com.blanchebridal.backend.product.spec;
 
 import com.blanchebridal.backend.product.dto.ProductFilters;
 import com.blanchebridal.backend.product.entity.Product;
+import com.blanchebridal.backend.rental.entity.Rental;
+import com.blanchebridal.backend.rental.entity.RentalStatus;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 public class ProductSpecification {
 
@@ -24,6 +28,22 @@ public class ProductSpecification {
             }
             if (filters.available() != null) {
                 predicates.add(cb.equal(root.get("isAvailable"), filters.available()));
+
+                // Additionally exclude products currently out on an ACTIVE/OVERDUE
+                // rental when the caller asked for available=true. isAvailable is a
+                // separate, admin-controlled flag (browsability/discontinued/etc.) —
+                // this does NOT replace it, it narrows it further using live rental
+                // state instead of duplicating that state onto the Product row.
+                if (Boolean.TRUE.equals(filters.available())) {
+                    Subquery<UUID> rentalSubquery = query.subquery(UUID.class);
+                    var rentalRoot = rentalSubquery.from(Rental.class);
+                    rentalSubquery.select(rentalRoot.get("product").get("id"))
+                            .where(cb.and(
+                                    cb.equal(rentalRoot.get("product").get("id"), root.get("id")),
+                                    rentalRoot.get("status").in(RentalStatus.ACTIVE, RentalStatus.OVERDUE)
+                            ));
+                    predicates.add(cb.not(cb.exists(rentalSubquery)));
+                }
             }
             if (filters.minPrice() != null || filters.maxPrice() != null) {
                 jakarta.persistence.criteria.Expression<java.math.BigDecimal> effectivePrice =
