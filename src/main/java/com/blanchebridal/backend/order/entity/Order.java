@@ -30,6 +30,7 @@ public class Order {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
+    @Builder.Default
     private OrderStatus status = OrderStatus.PENDING;
 
     @Column(name = "total_amount", nullable = false, precision = 10, scale = 2)
@@ -49,6 +50,7 @@ public class Order {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "order_mode", nullable = false, length = 10)
+    @Builder.Default
     private OrderMode orderMode = OrderMode.WEBSITE;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
@@ -68,4 +70,8 @@ public class Order {
     @Column(name = "payment_method", nullable = false, length = 20)
     @Builder.Default
     private PaymentMethod paymentMethod = PaymentMethod.PAYHERE;
+
+    @Column(name = "is_rental_deposit", nullable = false)
+    @Builder.Default
+    private Boolean isRentalDeposit = false;
 }

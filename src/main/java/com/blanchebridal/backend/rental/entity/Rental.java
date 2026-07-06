@@ -37,8 +37,8 @@ public class Rental {
     @EqualsAndHashCode.Exclude
     private Product product;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_id")
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_id", unique = true)
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     private Order order;
@@ -54,8 +54,7 @@ public class Rental {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    @Builder.Default
-    private RentalStatus status = RentalStatus.ACTIVE;
+    private RentalStatus status;
 
     @Column(name = "deposit_amount", precision = 10, scale = 2)
     private BigDecimal depositAmount;

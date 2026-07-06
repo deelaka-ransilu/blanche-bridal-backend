@@ -1,0 +1,6 @@
+ALTER TABLE rentals DROP CONSTRAINT IF EXISTS rentals_status_check;
+ALTER TABLE rentals ADD CONSTRAINT rentals_status_check
+    CHECK (status IN ('PENDING_PAYMENT','BOOKED','ACTIVE','OVERDUE','RETURNED','CANCELLED'));
+
+ALTER TABLE orders
+    ADD COLUMN is_rental_deposit BOOLEAN NOT NULL DEFAULT FALSE;

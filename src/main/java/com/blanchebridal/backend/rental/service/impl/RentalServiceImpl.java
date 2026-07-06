@@ -4,10 +4,14 @@ import com.blanchebridal.backend.shared.email.EmailService;
 import com.blanchebridal.backend.exception.ResourceNotFoundException;
 import com.blanchebridal.backend.exception.UnauthorizedException;
 import com.blanchebridal.backend.order.entity.Order;
+import com.blanchebridal.backend.order.entity.OrderItem;
+import com.blanchebridal.backend.order.entity.OrderMode;
+import com.blanchebridal.backend.order.entity.OrderStatus;
 import com.blanchebridal.backend.order.repository.OrderRepository;
 import com.blanchebridal.backend.product.entity.Product;
 import com.blanchebridal.backend.product.repository.ProductRepository;
 import com.blanchebridal.backend.rental.dto.req.CreateRentalRequest;
+import com.blanchebridal.backend.rental.dto.req.RentalBookingRequest;
 import com.blanchebridal.backend.rental.dto.req.UpdateBalanceRequest;
 import com.blanchebridal.backend.rental.dto.res.RentalResponse;
 import com.blanchebridal.backend.rental.entity.Rental;
@@ -23,6 +27,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -69,9 +74,91 @@ public class RentalServiceImpl implements RentalService {
                 .rentalEnd(req.getRentalEnd())
                 .depositAmount(req.getDepositAmount())
                 .notes(req.getNotes())
+                .status(RentalStatus.ACTIVE)
                 .build();
 
         return toResponse(rentalRepository.save(rental));
+    }
+
+    @Override
+    @Transactional
+    public RentalResponse bookRental(RentalBookingRequest req, UUID callerId) {
+        User user = userRepository.findById(callerId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        Product product = productRepository.findById(req.getProductId())
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+
+        if (Boolean.FALSE.equals(product.getIsActive()) || Boolean.FALSE.equals(product.getIsAvailable())) {
+            throw new IllegalStateException("Product is not available: " + product.getName());
+        }
+
+        if (product.getRentalPrice() == null) {
+            throw new IllegalStateException("Product is not available for rental: " + product.getName());
+        }
+
+        if (!req.getRentalEnd().isAfter(req.getRentalStart())) {
+            throw new IllegalArgumentException("Rental end date must be after start date");
+        }
+
+        if (req.getRentalStart().isBefore(LocalDate.now())) {
+            throw new IllegalArgumentException("Rental start date cannot be in the past");
+        }
+
+        // Same blanket availability check used by the existing admin flow —
+        // not date-range aware yet (see STEP_4B_RESCOPE.md §7 item 5 / out of scope this pass).
+        boolean alreadyRented = rentalRepository.existsByProduct_IdAndStatusIn(
+                req.getProductId(), List.of(RentalStatus.ACTIVE, RentalStatus.OVERDUE));
+        if (alreadyRented) {
+            throw new IllegalStateException(
+                    "Product is currently rented out and not yet returned");
+        }
+
+        BigDecimal depositAmount = product.getRentalPrice();
+
+        String imageUrl = (product.getImages() != null && !product.getImages().isEmpty())
+                ? product.getImages().get(0).getUrl() // ⚠ same unconfirmed getter as CURRENT_STATE.md #7
+                : null;
+
+        OrderItem item = OrderItem.builder()
+                .product(product)
+                .quantity(1)
+                .unitPrice(depositAmount)
+                .productName(product.getName())
+                .productImage(imageUrl)
+                .build();
+
+        Order syntheticOrder = Order.builder()
+                .user(user)
+                .status(OrderStatus.PENDING)
+                .totalAmount(depositAmount)
+                .notes("Rental deposit — auto-generated, not a customer purchase order")
+                .orderMode(OrderMode.WEBSITE)
+                .paymentMethod(req.getPaymentMethod())
+                .isRentalDeposit(true)
+                .items(List.of(item))
+                .build();
+
+        item.setOrder(syntheticOrder);
+
+        Order savedOrder = orderRepository.save(syntheticOrder);
+
+        Rental rental = Rental.builder()
+                .user(user)
+                .product(product)
+                .order(savedOrder)
+                .rentalStart(req.getRentalStart())
+                .rentalEnd(req.getRentalEnd())
+                .depositAmount(depositAmount)
+                .status(RentalStatus.PENDING_PAYMENT)
+                .build();
+
+        Rental savedRental = rentalRepository.save(rental);
+
+        log.info("[Rental] Customer {} booked rental for product {} — synthetic order {} created, deposit LKR {}",
+                callerId, req.getProductId(), savedOrder.getId(), depositAmount);
+
+        return toResponse(savedRental);
     }
 
     @Override

@@ -4,6 +4,7 @@ import com.blanchebridal.backend.auth.security.JwtUtil;
 import com.blanchebridal.backend.exception.UnauthorizedException;
 import com.blanchebridal.backend.rental.dto.req.CreateRentalRequest;
 import com.blanchebridal.backend.rental.dto.req.MarkReturnedRequest;
+import com.blanchebridal.backend.rental.dto.req.RentalBookingRequest;
 import com.blanchebridal.backend.rental.dto.req.UpdateBalanceRequest;
 import com.blanchebridal.backend.rental.entity.RentalStatus;
 import com.blanchebridal.backend.rental.service.RentalService;
@@ -96,6 +97,25 @@ public class RentalController {
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "data", rentalService.createRental(request)
+        ));
+    }
+
+    // CUSTOMER — self-service rental booking (Step 4b)
+    @PostMapping("/book")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<Map<String, Object>> bookRental(
+            @Valid @RequestBody RentalBookingRequest request,
+            @RequestHeader("Authorization") String authHeader) {
+
+        UUID userId = extractUserId(authHeader);
+
+        log.info("[Rental] Booking request — customer: {}, product: {}, start: {}, end: {}, method: {}",
+                userId, request.getProductId(), request.getRentalStart(),
+                request.getRentalEnd(), request.getPaymentMethod());
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "data", rentalService.bookRental(request, userId)
         ));
     }
 

@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface RentalRepository extends JpaRepository<Rental, UUID> {
@@ -21,4 +22,8 @@ public interface RentalRepository extends JpaRepository<Rental, UUID> {
 
     // Used to block booking a product that is currently out on rental
     boolean existsByProduct_IdAndStatusIn(UUID productId, List<RentalStatus> statuses);
+
+    // Used by PaymentServiceImpl to find the Rental linked to a synthetic
+    // rental-deposit Order, so payment confirmation can flip its status
+    Optional<Rental> findByOrder_Id(UUID orderId);
 }

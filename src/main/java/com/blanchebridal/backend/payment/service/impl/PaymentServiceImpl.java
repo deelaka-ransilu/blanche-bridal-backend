@@ -17,6 +17,9 @@ import com.blanchebridal.backend.payment.service.ReceiptService;
 import com.blanchebridal.backend.payment.util.PayHereUtil;
 import com.blanchebridal.backend.product.entity.Product;
 import com.blanchebridal.backend.product.repository.ProductRepository;
+import com.blanchebridal.backend.rental.entity.Rental;
+import com.blanchebridal.backend.rental.entity.RentalStatus;
+import com.blanchebridal.backend.rental.repository.RentalRepository;
 import com.blanchebridal.backend.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +39,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository  paymentRepository;
     private final OrderRepository    orderRepository;
     private final ProductRepository  productRepository;
+    private final RentalRepository   rentalRepository;
     private final PayHereUtil        payHereUtil;
     private final ReceiptService     receiptService;
 
@@ -128,8 +132,6 @@ public class PaymentServiceImpl implements PaymentService {
         if (!"2".equals(statusCode)) {
             log.info("PayHere non-success status {} for order {}", statusCode, orderId);
 
-            // Mark the payment as FAILED for non-success codes so the order
-            // scheduler can later clean up PENDING orders.
             if ("0".equals(statusCode) || "-1".equals(statusCode) || "-2".equals(statusCode) || "-3".equals(statusCode)) {
                 paymentRepository.findByPayhereOrderId(orderId).ifPresent(payment -> {
                     payment.setStatus(PaymentStatus.FAILED);
@@ -142,7 +144,6 @@ public class PaymentServiceImpl implements PaymentService {
 
         paymentRepository.findByPayhereOrderId(orderId).ifPresentOrElse(payment -> {
 
-            // Guard against duplicate webhook delivery
             if (payment.getStatus() == PaymentStatus.COMPLETED) {
                 log.info("Duplicate webhook received for already-completed order {}. Ignoring.", orderId);
                 return;
@@ -159,19 +160,23 @@ public class PaymentServiceImpl implements PaymentService {
 
             log.info("Payment COMPLETED for order {}. PayHere ID: {}", orderId, payherePaymentId);
 
-            // Deduct stock now that payment is confirmed.
-            // This is the ONLY place stock is reduced for PayHere orders —
-            // createOrder() does not touch stock. See confirmCashPayment() for
-            // the equivalent cash-flow stock deduction.
-            if (order.getItems() != null) {
-                for (OrderItem item : order.getItems()) {
-                    Product product = item.getProduct();
-                    if (product != null) {
-                        int newStock = Math.max(0, product.getStock() - item.getQuantity());
-                        product.setStock(newStock);
-                        productRepository.save(product);
-                        log.info("[Stock] Reduced stock for product {} ('{}') by {}. New stock: {}",
-                                product.getId(), product.getName(), item.getQuantity(), newStock);
+            if (Boolean.TRUE.equals(order.getIsRentalDeposit())) {
+                handleRentalDepositConfirmed(order);
+            } else {
+                // Deduct stock now that payment is confirmed.
+                // This is the ONLY place stock is reduced for PayHere orders —
+                // createOrder() does not touch stock. See confirmCashPayment() for
+                // the equivalent cash-flow stock deduction.
+                if (order.getItems() != null) {
+                    for (OrderItem item : order.getItems()) {
+                        Product product = item.getProduct();
+                        if (product != null) {
+                            int newStock = Math.max(0, product.getStock() - item.getQuantity());
+                            product.setStock(newStock);
+                            productRepository.save(product);
+                            log.info("[Stock] Reduced stock for product {} ('{}') by {}. New stock: {}",
+                                    product.getId(), product.getName(), item.getQuantity(), newStock);
+                        }
                     }
                 }
             }
@@ -204,7 +209,6 @@ public class PaymentServiceImpl implements PaymentService {
                         .status(PaymentStatus.PENDING)
                         .build());
 
-        // Guard against double-confirmation, mirroring handleWebhook()'s duplicate guard
         if (payment.getStatus() == PaymentStatus.COMPLETED) {
             log.info("[Payment] Cash payment already confirmed for order {}. Ignoring.", orderId);
             return PaymentStatusResponse.builder().status(PaymentStatus.COMPLETED.name()).build();
@@ -219,15 +223,19 @@ public class PaymentServiceImpl implements PaymentService {
 
         log.info("[Payment] Cash payment CONFIRMED for order {}", orderId);
 
-        if (order.getItems() != null) {
-            for (OrderItem item : order.getItems()) {
-                Product product = item.getProduct();
-                if (product != null) {
-                    int newStock = Math.max(0, product.getStock() - item.getQuantity());
-                    product.setStock(newStock);
-                    productRepository.save(product);
-                    log.info("[Stock] Reduced stock for product {} ('{}') by {}. New stock: {}",
-                            product.getId(), product.getName(), item.getQuantity(), newStock);
+        if (Boolean.TRUE.equals(order.getIsRentalDeposit())) {
+            handleRentalDepositConfirmed(order);
+        } else {
+            if (order.getItems() != null) {
+                for (OrderItem item : order.getItems()) {
+                    Product product = item.getProduct();
+                    if (product != null) {
+                        int newStock = Math.max(0, product.getStock() - item.getQuantity());
+                        product.setStock(newStock);
+                        productRepository.save(product);
+                        log.info("[Stock] Reduced stock for product {} ('{}') by {}. New stock: {}",
+                                product.getId(), product.getName(), item.getQuantity(), newStock);
+                    }
                 }
             }
         }
@@ -254,5 +262,29 @@ public class PaymentServiceImpl implements PaymentService {
                 .orElse(PaymentStatusResponse.builder()
                         .status(PaymentStatus.PENDING.name())
                         .build());
+    }
+
+    // ─── Rental-deposit hook ────────────────────────────────────────────────
+
+    /**
+     * Called from handleWebhook() and confirmCashPayment() when the confirmed
+     * order is a synthetic rental-deposit order (Order.isRentalDeposit = true).
+     * Flips the linked Rental from PENDING_PAYMENT -> BOOKED. Does NOT touch
+     * Product.stock — rentals don't deduct stock (STEP_4B_RESCOPE.md decision #4).
+     * BOOKED -> ACTIVE is scheduler-driven on rentalStart, not done here.
+     */
+    private void handleRentalDepositConfirmed(Order order) {
+        rentalRepository.findByOrder_Id(order.getId()).ifPresentOrElse(rental -> {
+            if (rental.getStatus() != RentalStatus.PENDING_PAYMENT) {
+                log.info("[Rental] Order {} confirmed but linked rental {} already in status {} — skipping transition.",
+                        order.getId(), rental.getId(), rental.getStatus());
+                return;
+            }
+            rental.setStatus(RentalStatus.BOOKED);
+            rentalRepository.save(rental);
+            log.info("[Rental] Rental {} for order {} transitioned PENDING_PAYMENT -> BOOKED.",
+                    rental.getId(), order.getId());
+        }, () -> log.warn("[Rental] Order {} flagged isRentalDeposit=true but no linked Rental found.",
+                order.getId()));
     }
 }

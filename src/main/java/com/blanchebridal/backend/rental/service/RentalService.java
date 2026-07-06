@@ -1,6 +1,7 @@
 package com.blanchebridal.backend.rental.service;
 
 import com.blanchebridal.backend.rental.dto.req.CreateRentalRequest;
+import com.blanchebridal.backend.rental.dto.req.RentalBookingRequest;
 import com.blanchebridal.backend.rental.dto.req.UpdateBalanceRequest;
 import com.blanchebridal.backend.rental.dto.res.RentalResponse;
 import com.blanchebridal.backend.rental.entity.RentalStatus;
@@ -14,6 +15,8 @@ import java.util.UUID;
 public interface RentalService {
 
     RentalResponse createRental(CreateRentalRequest req);
+
+    RentalResponse bookRental(RentalBookingRequest req, UUID callerId);
 
     Page<RentalResponse> getAllRentals(RentalStatus status, Pageable pageable);
 
