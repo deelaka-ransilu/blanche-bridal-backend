@@ -13,7 +13,7 @@ public class RentalScheduler {
 
     private final RentalService rentalService;
 
-    @Scheduled(cron = "0 * * * * *")  // every minute — TEMP for testing
+    @Scheduled(cron = "0 0 8 * * *") // every minute — TEMP for testing
     public void detectActiveRentals() {
         log.info("[RentalScheduler] Running rental activation detection...");
         rentalService.markActiveRentals();
