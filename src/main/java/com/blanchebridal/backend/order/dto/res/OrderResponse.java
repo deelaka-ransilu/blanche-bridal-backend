@@ -2,6 +2,7 @@ package com.blanchebridal.backend.order.dto.res;
 
 import com.blanchebridal.backend.order.entity.OrderMode;
 import com.blanchebridal.backend.order.entity.OrderStatus;
+import com.blanchebridal.backend.payment.entity.PaymentMethod;
 import lombok.Builder;
 import lombok.Data;
 import java.math.BigDecimal;
@@ -27,4 +28,6 @@ public class OrderResponse {
     private String fulfillmentMethod;
     private String deliveryAddress;
     private OrderMode orderMode;
+    private PaymentMethod paymentMethod;
+    private Boolean isRentalDeposit;
 }

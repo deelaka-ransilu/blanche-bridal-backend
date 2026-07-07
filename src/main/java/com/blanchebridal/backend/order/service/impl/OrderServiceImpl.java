@@ -264,6 +264,8 @@ public class OrderServiceImpl implements OrderService {
                 .deliveryAddress(order.getDeliveryAddress())
                 .customerPhone(order.getCustomerPhone())
                 .orderMode(order.getOrderMode())
+                .paymentMethod(order.getPaymentMethod())
+                .isRentalDeposit(order.getIsRentalDeposit())
                 .build();
     }
 
