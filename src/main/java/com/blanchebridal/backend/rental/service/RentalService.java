@@ -29,4 +29,6 @@ public interface RentalService {
     RentalResponse updateBalance(UUID id, UpdateBalanceRequest req);
 
     void markOverdueRentals();
+
+    void markActiveRentals();
 }

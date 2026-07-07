@@ -255,6 +255,27 @@ public class RentalServiceImpl implements RentalService {
         log.info("[RentalScheduler] Marked {} rental(s) as OVERDUE.", overdueRentals.size());
     }
 
+    @Override
+    @Transactional
+    public void markActiveRentals() {
+        List<Rental> toActivate = rentalRepository
+                .findByStatusAndRentalStartLessThanEqual(RentalStatus.BOOKED, LocalDate.now());
+
+        if (toActivate.isEmpty()) {
+            log.info("[RentalScheduler] No rentals to activate.");
+            return;
+        }
+
+        for (Rental rental : toActivate) {
+            rental.setStatus(RentalStatus.ACTIVE);
+            rentalRepository.save(rental);
+            log.info("[RentalScheduler] Rental {} transitioned BOOKED -> ACTIVE (start date {} reached).",
+                    rental.getId(), rental.getRentalStart());
+        }
+
+        log.info("[RentalScheduler] Activated {} rental(s).", toActivate.size());
+    }
+
     // ─── Mapper ───────────────────────────────────────────────────────────────
 
     private RentalResponse toResponse(Rental rental) {

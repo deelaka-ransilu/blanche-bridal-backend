@@ -26,4 +26,7 @@ public interface RentalRepository extends JpaRepository<Rental, UUID> {
     // Used by PaymentServiceImpl to find the Rental linked to a synthetic
     // rental-deposit Order, so payment confirmation can flip its status
     Optional<Rental> findByOrder_Id(UUID orderId);
+
+    // Used by activation detection: BOOKED rentals whose start date has arrived
+    List<Rental> findByStatusAndRentalStartLessThanEqual(RentalStatus status, LocalDate date);
 }
