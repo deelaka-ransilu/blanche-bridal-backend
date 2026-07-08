@@ -45,7 +45,7 @@ public class SecurityConfig {
                                 "/api/auth/forgot-password",
                                 "/api/auth/reset-password",
                                 "/api/auth/refresh",
-                                "/api/auth/logout"          // ← add this line
+                                "/api/auth/logout"
                         ).permitAll()
                         // Public catalog (read-only)
                         .requestMatchers(
@@ -53,6 +53,11 @@ public class SecurityConfig {
                                 "/api/products/**",
                                 "/api/categories/**",
                                 "/api/appointments/slots"
+                        ).permitAll()
+                        // Public contact form submission (guest inquiries)
+                        .requestMatchers(
+                                org.springframework.http.HttpMethod.POST,
+                                "/api/inquiries"
                         ).permitAll()
                         // PayHere webhook — must be public (PayHere calls this server-to-server)
                         .requestMatchers("/api/payments/notify").permitAll()
