@@ -1,5 +1,6 @@
 package com.blanchebridal.backend.order.dto.res;
 
+import com.blanchebridal.backend.order.entity.DiscountType;
 import com.blanchebridal.backend.order.entity.OrderMode;
 import com.blanchebridal.backend.order.entity.OrderStatus;
 import com.blanchebridal.backend.payment.entity.PaymentMethod;
@@ -30,4 +31,7 @@ public class OrderResponse {
     private OrderMode orderMode;
     private PaymentMethod paymentMethod;
     private Boolean isRentalDeposit;
+    private DiscountType discountType;
+    private BigDecimal discountValue;
+    private String discountReason;
 }

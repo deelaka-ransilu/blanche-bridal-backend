@@ -1,5 +1,6 @@
 package com.blanchebridal.backend.order.service.impl;
 
+import com.blanchebridal.backend.order.entity.DiscountType;
 import com.blanchebridal.backend.order.entity.OrderMode;
 import com.blanchebridal.backend.payment.entity.PaymentMethod;
 import com.blanchebridal.backend.shared.email.EmailService;
@@ -81,9 +82,24 @@ public class OrderServiceImpl implements OrderService {
                     "Cash payment is only available for staff-assisted orders");
         }
 
-        // ... rest of method unchanged, but replace every subsequent
-        // reference to `userId` with `targetUserId`, and `user` is already resolved above
-        // (remove the old duplicate userRepository.findById(userId) line)
+        // ── Discount resolution (staff-only, FR-OM-11) ──────────────────────
+        DiscountType discountType = null;
+        BigDecimal discountValue = null;
+        String discountReason = null;
+
+        if (req.getDiscountType() != null) {
+            if (!isStaff) {
+                throw new IllegalStateException("Discounts can only be applied by staff");
+            }
+            if (req.getDiscountType() == DiscountType.PERCENTAGE
+                    && (req.getDiscountValue().compareTo(BigDecimal.ZERO) < 0
+                    || req.getDiscountValue().compareTo(BigDecimal.valueOf(100)) > 0)) {
+                throw new IllegalArgumentException("Percentage discount must be between 0 and 100");
+            }
+            discountType = req.getDiscountType();
+            discountValue = req.getDiscountValue();
+            discountReason = req.getDiscountReason();
+        }
 
         List<OrderItem> items = new ArrayList<>();
         BigDecimal totalAmount = BigDecimal.ZERO;
@@ -128,24 +144,40 @@ public class OrderServiceImpl implements OrderService {
             totalAmount = totalAmount.add(unitPrice.multiply(BigDecimal.valueOf(itemReq.getQuantity())));
         }
 
+        // ── Apply discount to total (if any) ────────────────────────────────
+        BigDecimal discountedTotal = totalAmount;
+        if (discountType != null) {
+            BigDecimal discountAmount = discountType == DiscountType.PERCENTAGE
+                    ? totalAmount.multiply(discountValue).divide(BigDecimal.valueOf(100))
+                    : discountValue;
+
+            if (discountAmount.compareTo(totalAmount) > 0) {
+                throw new IllegalArgumentException("Discount cannot exceed order total");
+            }
+            discountedTotal = totalAmount.subtract(discountAmount);
+        }
+
         Order order = Order.builder()
                 .user(user)
                 .status(OrderStatus.PENDING)
-                .totalAmount(totalAmount)
+                .totalAmount(discountedTotal)
                 .notes(req.getNotes())
                 .fulfillmentMethod(req.getFulfillmentMethod())
                 .deliveryAddress(req.getDeliveryAddress())
                 .customerPhone(req.getCustomerPhone())
                 .orderMode(req.getOrderMode() != null ? req.getOrderMode() : OrderMode.WEBSITE)
                 .paymentMethod(paymentMethod)
+                .discountType(discountType)
+                .discountValue(discountValue)
+                .discountReason(discountReason)
                 .items(items)
                 .build();
 
         items.forEach(item -> item.setOrder(order));
 
         Order saved = orderRepository.save(order);
-        log.info("[Order] Created order {} for user {} (created by {}) — total LKR {} — payment method {}",
-                saved.getId(), targetUserId, callerId, saved.getTotalAmount(), paymentMethod);
+        log.info("[Order] Created order {} for user {} (created by {}) — total LKR {} (discount: {}) — payment method {}",
+                saved.getId(), targetUserId, callerId, saved.getTotalAmount(), discountType, paymentMethod);
         return toResponse(saved);
     }
 
@@ -266,6 +298,9 @@ public class OrderServiceImpl implements OrderService {
                 .orderMode(order.getOrderMode())
                 .paymentMethod(order.getPaymentMethod())
                 .isRentalDeposit(order.getIsRentalDeposit())
+                .discountType(order.getDiscountType())
+                .discountValue(order.getDiscountValue())
+                .discountReason(order.getDiscountReason())
                 .build();
     }
 

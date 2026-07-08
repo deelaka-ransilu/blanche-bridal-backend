@@ -74,4 +74,17 @@ public class Order {
     @Column(name = "is_rental_deposit", nullable = false)
     @Builder.Default
     private Boolean isRentalDeposit = false;
+
+    // ── Discount fields (Step 9c, Financial Reporting FR-OM-11) ─────────────
+    // Order-level discount, applied only by staff at order-creation time.
+    // Null discountType = no discount applied.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "discount_type", length = 20)
+    private DiscountType discountType;
+
+    @Column(name = "discount_value", precision = 10, scale = 2)
+    private BigDecimal discountValue;
+
+    @Column(name = "discount_reason")
+    private String discountReason;
 }
