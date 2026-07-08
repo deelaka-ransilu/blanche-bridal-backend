@@ -1,5 +1,6 @@
 package com.blanchebridal.backend.rental.service.impl;
 
+import com.blanchebridal.backend.order.repository.OrderRepository;
 import com.blanchebridal.backend.shared.email.EmailService;
 import com.blanchebridal.backend.exception.ResourceNotFoundException;
 import com.blanchebridal.backend.exception.UnauthorizedException;
@@ -7,7 +8,6 @@ import com.blanchebridal.backend.order.entity.Order;
 import com.blanchebridal.backend.order.entity.OrderItem;
 import com.blanchebridal.backend.order.entity.OrderMode;
 import com.blanchebridal.backend.order.entity.OrderStatus;
-import com.blanchebridal.backend.order.repository.OrderRepository;
 import com.blanchebridal.backend.product.entity.Product;
 import com.blanchebridal.backend.product.repository.ProductRepository;
 import com.blanchebridal.backend.rental.dto.req.CreateRentalRequest;

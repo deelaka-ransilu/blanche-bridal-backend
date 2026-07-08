@@ -15,4 +15,10 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     Page<Order> findByUser_Id(UUID userId, Pageable pageable);
     Page<Order> findByStatus(OrderStatus status, Pageable pageable);
     List<Order> findByStatusAndCreatedAtBefore(OrderStatus status, LocalDateTime cutoff);
+
+    // Added for Financial Reporting (Step 9c, FR-FR-01/02/04) -- reports need
+    // full lists (not Page<>) since they're aggregated in-memory by month,
+    // not paginated for display.
+    List<Order> findByStatusAndCreatedAtBetween(OrderStatus status, LocalDateTime from, LocalDateTime to);
+    List<Order> findByDiscountTypeIsNotNullAndCreatedAtBetween(LocalDateTime from, LocalDateTime to);
 }

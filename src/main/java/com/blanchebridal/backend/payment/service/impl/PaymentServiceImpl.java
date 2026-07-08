@@ -17,7 +17,6 @@ import com.blanchebridal.backend.payment.service.ReceiptService;
 import com.blanchebridal.backend.payment.util.PayHereUtil;
 import com.blanchebridal.backend.product.entity.Product;
 import com.blanchebridal.backend.product.repository.ProductRepository;
-import com.blanchebridal.backend.rental.entity.Rental;
 import com.blanchebridal.backend.rental.entity.RentalStatus;
 import com.blanchebridal.backend.rental.repository.RentalRepository;
 import com.blanchebridal.backend.user.entity.User;
@@ -37,7 +36,7 @@ import java.util.UUID;
 public class PaymentServiceImpl implements PaymentService {
 
     private final PaymentRepository  paymentRepository;
-    private final OrderRepository    orderRepository;
+    private final OrderRepository orderRepository;
     private final ProductRepository  productRepository;
     private final RentalRepository   rentalRepository;
     private final PayHereUtil        payHereUtil;
