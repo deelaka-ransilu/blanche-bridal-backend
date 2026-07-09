@@ -196,6 +196,16 @@ public class AppointmentServiceImpl implements AppointmentService {
         appointment.setAppointmentDate(req.getAppointmentDate());
         appointment.setTimeSlot(req.getTimeSlot());
 
+        // A customer-initiated reschedule invalidates the prior confirmation --
+        // the new time hasn't been reviewed by the boutique yet, so it drops
+        // back to PENDING pending admin re-confirmation. Admin/employee-initiated
+        // reschedules are already authoritative and keep their current status.
+        boolean isCustomer = role != null &&
+                (role.equals(ROLE_CUSTOMER) || role.equals(ROLE_CUSTOMER_ALT));
+        if (isCustomer && appointment.getStatus() == AppointmentStatus.CONFIRMED) {
+            appointment.setStatus(AppointmentStatus.PENDING);
+        }
+
         if (appointment.getGoogleEventId() != null) {
             googleCalendarService.updateEvent(appointment.getGoogleEventId(), appointment);
         }
