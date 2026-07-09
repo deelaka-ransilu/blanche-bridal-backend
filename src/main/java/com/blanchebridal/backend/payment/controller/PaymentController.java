@@ -75,7 +75,7 @@ public class PaymentController {
     }
 
     @PostMapping("/{orderId}/confirm-cash")
-    @PreAuthorize("hasAnyRole('ADMIN','EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> confirmCashPayment(@PathVariable UUID orderId) {
         log.info("[Payment] Confirming cash payment for order {}", orderId);
         return ResponseEntity.ok(Map.of("success", true, "data", paymentService.confirmCashPayment(orderId)));
