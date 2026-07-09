@@ -38,13 +38,19 @@ public class RefundServiceImpl implements RefundService {
         Payment payment = paymentRepository.findByOrder_Id(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("No payment found for order: " + orderId));
 
+        // Check "already refunded" BEFORE "is payment COMPLETED" -- a successful
+        // refund flips Payment.status to REFUNDED, so on a repeat attempt the old
+        // check order (COMPLETED-check first) always caught it as "not COMPLETED"
+        // and threw a 400 IllegalStateException, never reaching this 409 branch.
+        // Checking existence first ensures a repeat refund attempt gets the
+        // correct, more specific 409 CONFLICT response instead of a misleading 400.
+        if (refundRepository.existsByOrder_Id(orderId)) {
+            throw new ConflictException("Order has already been refunded: " + orderId);
+        }
+
         if (payment.getStatus() != PaymentStatus.COMPLETED) {
             throw new IllegalStateException("Cannot refund a payment that is not COMPLETED (current status: "
                     + payment.getStatus() + ")");
-        }
-
-        if (refundRepository.existsByOrder_Id(orderId)) {
-            throw new ConflictException("Order has already been refunded: " + orderId);
         }
 
         User admin = userRepository.findById(adminId)
