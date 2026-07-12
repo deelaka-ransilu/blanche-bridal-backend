@@ -24,4 +24,10 @@ public class RentalScheduler {
         log.info("[RentalScheduler] Running overdue rental detection...");
         rentalService.markOverdueRentals();
     }
+
+    @Scheduled(cron = "0 0 8 * * *")
+    public void detectExpiredBookings() {
+        log.info("[RentalScheduler] Running stale booking expiry detection...");
+        rentalService.expireStaleBookings();
+    }
 }

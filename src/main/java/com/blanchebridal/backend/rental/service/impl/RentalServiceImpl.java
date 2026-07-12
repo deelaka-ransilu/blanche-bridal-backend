@@ -1,6 +1,7 @@
 package com.blanchebridal.backend.rental.service.impl;
 
 import com.blanchebridal.backend.order.repository.OrderRepository;
+import com.blanchebridal.backend.payment.entity.PaymentMethod;
 import com.blanchebridal.backend.shared.email.EmailService;
 import com.blanchebridal.backend.exception.ResourceNotFoundException;
 import com.blanchebridal.backend.exception.UnauthorizedException;
@@ -52,7 +53,6 @@ public class RentalServiceImpl implements RentalService {
         Product product = productRepository.findById(req.getProductId())
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
-        // Block if product is already out on an active or overdue rental
         boolean alreadyRented = rentalRepository.existsByProduct_IdAndStatusIn(
                 req.getProductId(), List.of(RentalStatus.ACTIVE, RentalStatus.OVERDUE));
         if (alreadyRented) {
@@ -105,8 +105,6 @@ public class RentalServiceImpl implements RentalService {
             throw new IllegalArgumentException("Rental start date cannot be in the past");
         }
 
-        // Same blanket availability check used by the existing admin flow —
-        // not date-range aware yet (see STEP_4B_RESCOPE.md §7 item 5 / out of scope this pass).
         boolean alreadyRented = rentalRepository.existsByProduct_IdAndStatusIn(
                 req.getProductId(), List.of(RentalStatus.ACTIVE, RentalStatus.OVERDUE));
         if (alreadyRented) {
@@ -114,16 +112,16 @@ public class RentalServiceImpl implements RentalService {
                     "Product is currently rented out and not yet returned");
         }
 
-        BigDecimal depositAmount = product.getRentalPrice();
+        BigDecimal rentalFee = product.getRentalPrice();
 
         String imageUrl = (product.getImages() != null && !product.getImages().isEmpty())
-                ? product.getImages().get(0).getUrl() // ⚠ same unconfirmed getter as CURRENT_STATE.md #7
+                ? product.getImages().get(0).getUrl()
                 : null;
 
         OrderItem item = OrderItem.builder()
                 .product(product)
                 .quantity(1)
-                .unitPrice(depositAmount)
+                .unitPrice(rentalFee)
                 .productName(product.getName())
                 .productImage(imageUrl)
                 .build();
@@ -131,10 +129,10 @@ public class RentalServiceImpl implements RentalService {
         Order syntheticOrder = Order.builder()
                 .user(user)
                 .status(OrderStatus.PENDING)
-                .totalAmount(depositAmount)
-                .notes("Rental deposit — auto-generated, not a customer purchase order")
+                .totalAmount(rentalFee)
+                .notes("Rental fee — auto-generated, not a customer purchase order")
                 .orderMode(OrderMode.WEBSITE)
-                .paymentMethod(req.getPaymentMethod())
+                .paymentMethod(PaymentMethod.CASH) // rentals are cash-only — decided this session
                 .isRentalDeposit(true)
                 .items(List.of(item))
                 .build();
@@ -149,14 +147,14 @@ public class RentalServiceImpl implements RentalService {
                 .order(savedOrder)
                 .rentalStart(req.getRentalStart())
                 .rentalEnd(req.getRentalEnd())
-                .depositAmount(depositAmount)
+                .depositAmount(rentalFee)
                 .status(RentalStatus.PENDING_PAYMENT)
                 .build();
 
         Rental savedRental = rentalRepository.save(rental);
 
-        log.info("[Rental] Customer {} booked rental for product {} — synthetic order {} created, deposit LKR {}",
-                callerId, req.getProductId(), savedOrder.getId(), depositAmount);
+        log.info("[Rental] Customer {} booked rental for product {} — synthetic order {} created, rental fee LKR {} (cash, due at pickup)",
+                callerId, req.getProductId(), savedOrder.getId(), rentalFee);
 
         return toResponse(savedRental);
     }
@@ -274,6 +272,43 @@ public class RentalServiceImpl implements RentalService {
         }
 
         log.info("[RentalScheduler] Activated {} rental(s).", toActivate.size());
+    }
+
+    // ─── New: 48h auto-expiry of unpaid bookings ───────────────────────────
+    // Decided this session: item stays unlocked/unreserved until cash is paid.
+    // If nobody's paid by 48h after the requested pickup (rentalStart) date,
+    // cancel the booking and its synthetic order so it stops cluttering the
+    // admin dashboard. Reuses the same repo method markActiveRentals() uses,
+    // just against PENDING_PAYMENT with a 2-day-old cutoff (rentalStart is a
+    // LocalDate, so date-level granularity is the best available precision).
+    @Override
+    @Transactional
+    public void expireStaleBookings() {
+        LocalDate cutoff = LocalDate.now().minusDays(2);
+
+        List<Rental> toExpire = rentalRepository
+                .findByStatusAndRentalStartLessThanEqual(RentalStatus.PENDING_PAYMENT, cutoff);
+
+        if (toExpire.isEmpty()) {
+            log.info("[RentalScheduler] No stale PENDING_PAYMENT bookings to expire.");
+            return;
+        }
+
+        for (Rental rental : toExpire) {
+            rental.setStatus(RentalStatus.CANCELLED);
+            rentalRepository.save(rental);
+
+            Order order = rental.getOrder();
+            if (order != null && order.getStatus() == OrderStatus.PENDING) {
+                order.setStatus(OrderStatus.CANCELLED);
+                orderRepository.save(order);
+            }
+
+            log.info("[RentalScheduler] Rental {} expired — no cash payment received within 48h of requested pickup date {}.",
+                    rental.getId(), rental.getRentalStart());
+        }
+
+        log.info("[RentalScheduler] Expired {} stale rental booking(s).", toExpire.size());
     }
 
     // ─── Mapper ───────────────────────────────────────────────────────────────

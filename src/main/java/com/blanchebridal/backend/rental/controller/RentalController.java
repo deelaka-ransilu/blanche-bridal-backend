@@ -109,9 +109,9 @@ public class RentalController {
 
         UUID userId = extractUserId(authHeader);
 
-        log.info("[Rental] Booking request — customer: {}, product: {}, start: {}, end: {}, method: {}",
+        log.info("[Rental] Booking request — customer: {}, product: {}, start: {}, end: {}",
                 userId, request.getProductId(), request.getRentalStart(),
-                request.getRentalEnd(), request.getPaymentMethod());
+                request.getRentalEnd());
 
         return ResponseEntity.ok(Map.of(
                 "success", true,

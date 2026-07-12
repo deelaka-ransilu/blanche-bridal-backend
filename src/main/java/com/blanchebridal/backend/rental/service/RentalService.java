@@ -31,4 +31,8 @@ public interface RentalService {
     void markOverdueRentals();
 
     void markActiveRentals();
+
+    // New: cancels PENDING_PAYMENT rentals (and their synthetic order) once
+    // 48h have passed since the requested pickup date with no cash paid.
+    void expireStaleBookings();
 }
