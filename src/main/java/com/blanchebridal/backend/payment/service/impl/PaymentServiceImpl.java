@@ -3,7 +3,6 @@ package com.blanchebridal.backend.payment.service.impl;
 import com.blanchebridal.backend.exception.ResourceNotFoundException;
 import com.blanchebridal.backend.exception.UnauthorizedException;
 import com.blanchebridal.backend.order.entity.Order;
-import com.blanchebridal.backend.order.entity.OrderItem;
 import com.blanchebridal.backend.order.entity.OrderStatus;
 import com.blanchebridal.backend.order.repository.OrderRepository;
 import com.blanchebridal.backend.payment.dto.res.PaymentInitiateResponse;
@@ -15,8 +14,6 @@ import com.blanchebridal.backend.payment.repository.PaymentRepository;
 import com.blanchebridal.backend.payment.service.PaymentService;
 import com.blanchebridal.backend.payment.service.ReceiptService;
 import com.blanchebridal.backend.payment.util.PayHereUtil;
-import com.blanchebridal.backend.product.entity.Product;
-import com.blanchebridal.backend.product.repository.ProductRepository;
 import com.blanchebridal.backend.rental.entity.RentalStatus;
 import com.blanchebridal.backend.rental.repository.RentalRepository;
 import com.blanchebridal.backend.user.entity.User;
@@ -37,7 +34,6 @@ public class PaymentServiceImpl implements PaymentService {
 
     private final PaymentRepository  paymentRepository;
     private final OrderRepository orderRepository;
-    private final ProductRepository  productRepository;
     private final RentalRepository   rentalRepository;
     private final PayHereUtil        payHereUtil;
     private final ReceiptService     receiptService;
@@ -161,24 +157,15 @@ public class PaymentServiceImpl implements PaymentService {
 
             if (Boolean.TRUE.equals(order.getIsRentalDeposit())) {
                 handleRentalDepositConfirmed(order);
-            } else {
-                // Deduct stock now that payment is confirmed.
-                // This is the ONLY place stock is reduced for PayHere orders —
-                // createOrder() does not touch stock. See confirmCashPayment() for
-                // the equivalent cash-flow stock deduction.
-                if (order.getItems() != null) {
-                    for (OrderItem item : order.getItems()) {
-                        Product product = item.getProduct();
-                        if (product != null) {
-                            int newStock = Math.max(0, product.getStock() - item.getQuantity());
-                            product.setStock(newStock);
-                            productRepository.save(product);
-                            log.info("[Stock] Reduced stock for product {} ('{}') by {}. New stock: {}",
-                                    product.getId(), product.getName(), item.getQuantity(), newStock);
-                        }
-                    }
-                }
             }
+            // NOTE: stock is NOT touched here. OrderServiceImpl.createOrder
+            // already reserves (decrements) stock at order creation time,
+            // under a pessimistic lock, so the order can never oversell
+            // between creation and confirmation. Decrementing again on
+            // payment confirmation would double-count every purchase order.
+            // If the order is later cancelled or expires while still
+            // PENDING, OrderServiceImpl.restoreStock() gives the reservation
+            // back — that's the single release path for reserved stock.
 
             receiptService.generateReceipt(order, payment);
 
@@ -224,20 +211,11 @@ public class PaymentServiceImpl implements PaymentService {
 
         if (Boolean.TRUE.equals(order.getIsRentalDeposit())) {
             handleRentalDepositConfirmed(order);
-        } else {
-            if (order.getItems() != null) {
-                for (OrderItem item : order.getItems()) {
-                    Product product = item.getProduct();
-                    if (product != null) {
-                        int newStock = Math.max(0, product.getStock() - item.getQuantity());
-                        product.setStock(newStock);
-                        productRepository.save(product);
-                        log.info("[Stock] Reduced stock for product {} ('{}') by {}. New stock: {}",
-                                product.getId(), product.getName(), item.getQuantity(), newStock);
-                    }
-                }
-            }
         }
+        // NOTE: stock is NOT touched here — see the matching note in
+        // handleWebhook(). createOrder() already reserved this order's stock
+        // at creation time; confirming payment (cash or PayHere) must not
+        // decrement it again.
 
         receiptService.generateReceipt(order, payment);
 

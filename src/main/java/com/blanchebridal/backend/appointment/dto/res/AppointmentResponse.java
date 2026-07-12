@@ -2,11 +2,13 @@ package com.blanchebridal.backend.appointment.dto.res;
 
 import com.blanchebridal.backend.appointment.entity.AppointmentStatus;
 import com.blanchebridal.backend.appointment.entity.AppointmentType;
+import com.blanchebridal.backend.appointment.entity.OccasionType;
 import lombok.Builder;
 import lombok.Data;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -26,4 +28,15 @@ public class AppointmentResponse {
     private String googleEventId;
     private String notes;
     private LocalDateTime createdAt;
+
+    // ── CUSTOM_CONSULTATION-only fields ─────────────────────────────────
+    // Flattened onto AppointmentResponse rather than nested (e.g. a
+    // `customDesignRequest` object) for a simpler frontend shape — these
+    // are null for FITTING/RENTAL_PICKUP/PURCHASE appointments and
+    // populated only when type == CUSTOM_CONSULTATION.
+
+    private OccasionType occasionType;
+    private LocalDate occasionDate;
+    private String stylePreferences;
+    private List<String> referenceImages;
 }

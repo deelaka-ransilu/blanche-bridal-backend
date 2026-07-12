@@ -21,6 +21,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -37,7 +39,7 @@ public class ProductController {
     private final ProductService productService;
     private final ReviewService reviewService;
     private final JwtUtil jwtUtil;
-     private final Cloudinary cloudinary;
+    private final Cloudinary cloudinary;
 
     // ── Public ────────────────────────────────────────────────────────────────
 
@@ -176,11 +178,30 @@ public class ProductController {
         return ResponseEntity.ok(Map.of("success", true, "data", "Image removed"));
     }
 
+    // ── Cloudinary signed upload ────────────────────────────────────────────
+    // Shared by both the admin product-image flow and the customer-facing
+    // custom-design reference-image flow. Method-level @PreAuthorize allows
+    // both roles broadly; the actual destination folder is resolved from a
+    // fixed server-side allowlist keyed by `context` (never taken directly
+    // from client input, so a caller can't sign into an arbitrary Cloudinary
+    // path). The "product" context is further gated to ADMIN only via
+    // requireAdmin() below, since a CUSTOMER should never write into the
+    // real product-photo folder.
     @GetMapping("/upload-signature")
-    @PreAuthorize("hasAnyRole('ADMIN')")
-    public ResponseEntity<Map<String, Object>> getUploadSignature() {
+    @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER')")
+    public ResponseEntity<Map<String, Object>> getUploadSignature(
+            @RequestParam(defaultValue = "product") String context) {
+
+        String folder = switch (context) {
+            case "product" -> {
+                requireAdmin();
+                yield "blanche-bridal/products";
+            }
+            case "custom-design" -> "blanche-bridal/custom-design-references";
+            default -> throw new IllegalArgumentException("Unknown upload context: " + context);
+        };
+
         long timestamp = System.currentTimeMillis() / 1000L;
-        String folder = "blanche-bridal/products";
 
         Map<String, Object> paramsToSign = Map.of(
                 "timestamp", timestamp,
@@ -200,12 +221,21 @@ public class ProductController {
         return ResponseEntity.ok(Map.of("success", true, "data", response));
     }
 
-    // ── Helper ────────────────────────────────────────────────────────────────
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private UUID extractUserId(String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             throw new UnauthorizedException("Missing or invalid Authorization header");
         }
         return UUID.fromString(jwtUtil.extractUserId(authHeader.substring(7)));
+    }
+
+    private void requireAdmin() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        boolean isAdmin = auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        if (!isAdmin) {
+            throw new UnauthorizedException("Admin role required for this upload context");
+        }
     }
 }

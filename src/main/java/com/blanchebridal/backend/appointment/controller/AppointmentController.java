@@ -104,18 +104,18 @@ public class AppointmentController {
         ));
     }
 
-    @PostMapping // POST request it means getting a data from the user to store in the databse
-    @PreAuthorize("hasRole('CUSTOMER')") // checkign the JWT has the role of customer before allowing access to this endpoint
+    @PostMapping
+    @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<Map<String, Object>> bookAppointment(
-            @RequestHeader("Authorization") String authHeader, // this is the bearer token ?
-            @Valid @RequestBody CreateAppointmentRequest request) { //this is for the getting the valid json chekcin in the dtorequest has structure of the correct data it need
-        UUID userId = extractUserId(authHeader); // exrtactring the user id from the jwt token
+            @RequestHeader("Authorization") String authHeader,
+            @Valid @RequestBody CreateAppointmentRequest request) {
+        UUID userId = extractUserId(authHeader);
         log.info("[Appointment] Booking request — user: {}, date: {}, slot: {}, type: {}",
-                userId, request.getAppointmentDate(), request.getTimeSlot(), request.getType()); // logging for the debugging
+                userId, request.getAppointmentDate(), request.getTimeSlot(), request.getType());
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "data", appointmentService.bookAppointment(request, userId)
-        )); // return the respsonses i dont know about the Resposne entity
+        ));
     }
 
     @PutMapping("/{id}/confirm")

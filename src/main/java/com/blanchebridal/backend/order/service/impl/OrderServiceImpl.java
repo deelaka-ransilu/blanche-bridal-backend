@@ -105,7 +105,11 @@ public class OrderServiceImpl implements OrderService {
         BigDecimal totalAmount = BigDecimal.ZERO;
 
         for (OrderItemRequest itemReq : req.getItems()) {
-            Product product = productRepository.findById(itemReq.getProductId())
+            // Locked read — without this, two near-simultaneous orders on the
+            // last unit of stock can both pass the check below before either
+            // commits its decrement, causing an oversell. The lock is held
+            // for the rest of this transaction and released on commit.
+            Product product = productRepository.findByIdForUpdate(itemReq.getProductId())
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "Product not found: " + itemReq.getProductId()));
 
@@ -119,6 +123,17 @@ public class OrderServiceImpl implements OrderService {
                                 + " — available: " + product.getStock()
                                 + ", requested: " + itemReq.getQuantity());
             }
+
+            // Reserve stock now, at order creation (PENDING), not at
+            // CONFIRMED. Reserving later leaves the same oversell window
+            // open between "order created" and "staff confirms" — two
+            // customers could both pass the check above and only one could
+            // actually be confirmed. Abandoned/cancelled orders release
+            // their reservation back via cancelOrder (and, later, an
+            // expiry job for stale PENDING_PAYMENT orders using the same
+            // restore path).
+            product.setStock(product.getStock() - itemReq.getQuantity());
+            productRepository.save(product);
 
             // NOTE: purchase-only for now — no lineType field exists yet to choose
             // between purchasePrice/rentalPrice. This is Payment Issue A
@@ -220,6 +235,14 @@ public class OrderServiceImpl implements OrderService {
     public OrderResponse updateOrderStatus(UUID id, OrderStatus newStatus) {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + id));
+
+        // Restore reserved stock if staff cancels via this path too — not
+        // just the customer-facing cancelOrder() below. Without this, a
+        // staff-side cancel leaks the reservation forever.
+        if (newStatus == OrderStatus.CANCELLED && order.getStatus() != OrderStatus.CANCELLED) {
+            restoreStock(order);
+        }
+
         order.setStatus(newStatus);
         Order saved = orderRepository.save(order);
         log.info("[Order] Status updated — {} for order {}", newStatus, id);
@@ -267,9 +290,30 @@ public class OrderServiceImpl implements OrderService {
             return;
         }
 
+        restoreStock(order);
+
         order.setStatus(OrderStatus.CANCELLED);
         orderRepository.save(order);
         log.info("[Order] Cancelled order {} by user {}", id, userId);
+    }
+
+    // Gives back the stock reserved at createOrder time. Shared by both
+    // cancelOrder (customer-initiated) and updateOrderStatus (staff-initiated
+    // cancel), and reusable later by a stale-order expiry job — same
+    // reservation, same release path, no matter who/what triggers it.
+    private void restoreStock(Order order) {
+        if (order.getItems() == null) return;
+        for (OrderItem item : order.getItems()) {
+            Product product = item.getProduct();
+            if (product == null) continue;
+            // Locked read for the same reason as createOrder — restoring
+            // stock is itself a read-modify-write that needs to be race-safe.
+            Product locked = productRepository.findByIdForUpdate(product.getId())
+                    .orElse(null);
+            if (locked == null) continue;
+            locked.setStock(locked.getStock() + item.getQuantity());
+            productRepository.save(locked);
+        }
     }
 
     private OrderResponse toResponse(Order order) {

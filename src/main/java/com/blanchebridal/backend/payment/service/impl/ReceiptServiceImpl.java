@@ -268,12 +268,19 @@ public class ReceiptServiceImpl implements ReceiptService {
     @SuppressWarnings("unchecked")
     private String uploadToCloudinary(byte[] pdfBytes,
                                       String receiptNumber) throws Exception {
+        // "format", "pdf" is what makes the resulting secure_url end in
+        // .pdf (e.g. .../receipts/RCP-2026-00001.pdf) instead of a bare
+        // extensionless public_id. Without it, browsers have no way to
+        // recognize the file as a PDF and just force a generic download
+        // dialog with no extension -- confirmed by pasting the raw URL
+        // directly in a browser tab.
         Map<String, Object> uploadResult = cloudinary.uploader().upload(
                 pdfBytes,
                 ObjectUtils.asMap(
                         "resource_type", "raw",
                         "folder",        "receipts",
                         "public_id",     receiptNumber,
+                        "format",        "pdf",
                         "overwrite",     true
                 ));
         return (String) uploadResult.get("secure_url");
