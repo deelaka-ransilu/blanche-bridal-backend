@@ -113,6 +113,14 @@ public class AppointmentServiceImpl implements AppointmentService {
                 throw new IllegalArgumentException(
                         "Occasion date is required for a custom design consultation");
             }
+            if (req.getOccasionDate().isBefore(LocalDate.now())) {
+                throw new IllegalArgumentException(
+                        "Occasion date cannot be in the past");
+            }
+            if (!req.getOccasionDate().isAfter(req.getAppointmentDate())) {
+                throw new IllegalArgumentException(
+                        "Occasion date must be after the consultation date");
+            }
         }
 
         Appointment appointment = Appointment.builder()
