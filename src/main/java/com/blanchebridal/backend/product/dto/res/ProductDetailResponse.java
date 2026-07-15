@@ -14,6 +14,7 @@ public record ProductDetailResponse(
         String description,
         ProductType type,
         BigDecimal rentalPrice,
+        BigDecimal rentalPricePerDay,
         BigDecimal purchasePrice,
         Integer stock,
         Boolean isAvailable,

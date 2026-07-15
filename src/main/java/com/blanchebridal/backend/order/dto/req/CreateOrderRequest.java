@@ -20,6 +20,10 @@ public class CreateOrderRequest {
     private List<OrderItemRequest> items;
 
     private String notes;
+
+    // "DELIVERY" or "PICKUP" (case-insensitive). Defaults to DELIVERY if
+    // omitted — see isDeliveryAddressValid() below, which requires
+    // deliveryAddress whenever fulfillmentMethod isn't PICKUP.
     private String fulfillmentMethod;
     private String deliveryAddress;
     private String customerPhone;
@@ -48,5 +52,18 @@ public class CreateOrderRequest {
     @AssertTrue(message = "discountValue is required when discountType is set")
     private boolean isDiscountValid() {
         return discountType == null || discountValue != null;
+    }
+
+    // Pickup orders don't need an address; everything else (including a
+    // missing/blank fulfillmentMethod, which defaults to delivery behavior)
+    // does. Without this, a client could submit "DELIVERY" with no address
+    // and the order would be created anyway — the service layer just stores
+    // whatever it's given.
+    @AssertTrue(message = "deliveryAddress is required when fulfillmentMethod is DELIVERY")
+    private boolean isDeliveryAddressValid() {
+        if ("PICKUP".equalsIgnoreCase(fulfillmentMethod)) {
+            return true;
+        }
+        return deliveryAddress != null && !deliveryAddress.isBlank();
     }
 }

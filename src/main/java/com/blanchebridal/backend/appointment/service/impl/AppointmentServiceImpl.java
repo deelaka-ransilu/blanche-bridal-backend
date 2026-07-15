@@ -31,6 +31,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -53,6 +56,12 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private static final String ROLE_CUSTOMER = "ROLE_CUSTOMER";
     private static final String ROLE_CUSTOMER_ALT = "CUSTOMER";
+
+    // Boutique operates on Sri Lanka time (UTC+5:30, no DST) regardless of
+    // where the application server is deployed -- all "is this in the
+    // past" checks for appointments are evaluated in this zone.
+    private static final ZoneId COLOMBO = ZoneId.of("Asia/Colombo");
+    private static final long MIN_LEAD_MINUTES = 60;
 
     @Override
     @Transactional(readOnly = true)
@@ -84,6 +93,22 @@ public class AppointmentServiceImpl implements AppointmentService {
     public AppointmentResponse bookAppointment(CreateAppointmentRequest req, UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        // Reject bookings in the past or with insufficient lead time,
+        // evaluated in the boutique's local timezone (Asia/Colombo)
+        // regardless of the server's deployment timezone. This is the
+        // authoritative check -- the frontend only mirrors it for UX,
+        // since a direct API call could otherwise bypass it entirely.
+        ZonedDateTime nowColombo = ZonedDateTime.now(COLOMBO);
+        ZonedDateTime requestedDateTime = req.getAppointmentDate()
+                .atTime(LocalTime.parse(req.getTimeSlot()))
+                .atZone(COLOMBO);
+
+        if (requestedDateTime.isBefore(nowColombo.plusMinutes(MIN_LEAD_MINUTES))) {
+            throw new IllegalStateException(
+                    "Cannot book a slot in the past or with less than "
+                            + MIN_LEAD_MINUTES + " minutes' notice");
+        }
 
         // Race-condition guard — check slot is still free
         boolean slotTaken = appointmentRepository

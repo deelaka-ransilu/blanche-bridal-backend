@@ -283,7 +283,7 @@ public class ProductServiceImpl implements ProductService {
 
         return new ProductDetailResponse(
                 p.getId(), p.getName(), p.getSlug(), p.getDescription(), p.getType(),
-                p.getRentalPrice(), p.getPurchasePrice(),
+                p.getRentalPrice(), p.getRentalPricePerDay(), p.getPurchasePrice(),
                 p.getStock(), p.getIsAvailable(),
                 fromJson(p.getSizes()), images,
                 null, categoryInfo,

@@ -1,5 +1,6 @@
 package com.blanchebridal.backend.rental.service.impl;
 
+import com.blanchebridal.backend.exception.ConflictException;
 import com.blanchebridal.backend.order.repository.OrderRepository;
 import com.blanchebridal.backend.payment.entity.PaymentMethod;
 import com.blanchebridal.backend.shared.email.EmailService;
@@ -30,6 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -93,7 +95,7 @@ public class RentalServiceImpl implements RentalService {
             throw new IllegalStateException("Product is not available: " + product.getName());
         }
 
-        if (product.getRentalPrice() == null) {
+        if (product.getRentalPrice() == null && product.getRentalPricePerDay() == null) {
             throw new IllegalStateException("Product is not available for rental: " + product.getName());
         }
 
@@ -112,7 +114,16 @@ public class RentalServiceImpl implements RentalService {
                     "Product is currently rented out and not yet returned");
         }
 
-        BigDecimal rentalFee = product.getRentalPrice();
+        // Per-day pricing takes priority when set on the product; otherwise
+        // fall back to the flat one-time rentalPrice fee (legacy behavior,
+        // still used by any product without a per-day rate configured).
+        BigDecimal rentalFee;
+        long days = ChronoUnit.DAYS.between(req.getRentalStart(), req.getRentalEnd());
+        if (product.getRentalPricePerDay() != null) {
+            rentalFee = product.getRentalPricePerDay().multiply(BigDecimal.valueOf(days));
+        } else {
+            rentalFee = product.getRentalPrice();
+        }
 
         String imageUrl = (product.getImages() != null && !product.getImages().isEmpty())
                 ? product.getImages().get(0).getUrl()
@@ -153,8 +164,8 @@ public class RentalServiceImpl implements RentalService {
 
         Rental savedRental = rentalRepository.save(rental);
 
-        log.info("[Rental] Customer {} booked rental for product {} — synthetic order {} created, rental fee LKR {} (cash, due at pickup)",
-                callerId, req.getProductId(), savedOrder.getId(), rentalFee);
+        log.info("[Rental] Customer {} booked rental for product {} — synthetic order {} created, {} days, rental fee LKR {} (cash, due at pickup)",
+                callerId, req.getProductId(), savedOrder.getId(), days, rentalFee);
 
         return toResponse(savedRental);
     }
@@ -214,6 +225,26 @@ public class RentalServiceImpl implements RentalService {
                 .orElseThrow(() -> new ResourceNotFoundException("Rental not found: " + id));
 
         rental.setBalanceDue(req.getBalanceDue());
+        return toResponse(rentalRepository.save(rental));
+    }
+
+    @Override
+    @Transactional
+    public RentalResponse cancelRental(UUID id, UUID userId, String role) {
+        Rental rental = rentalRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Rental not found: " + id));
+
+        boolean isOwner = rental.getUser() != null && rental.getUser().getId().equals(userId);
+        boolean isStaff = "ROLE_ADMIN".equals(role) || "ROLE_EMPLOYEE".equals(role);
+        if (!isOwner && !isStaff) {
+            throw new UnauthorizedException("Not authorized to cancel this rental");
+        }
+
+        if (rental.getStatus() != RentalStatus.PENDING_PAYMENT && rental.getStatus() != RentalStatus.BOOKED) {
+            throw new ConflictException("This rental can no longer be cancelled");
+        }
+
+        rental.setStatus(RentalStatus.CANCELLED);
         return toResponse(rentalRepository.save(rental));
     }
 

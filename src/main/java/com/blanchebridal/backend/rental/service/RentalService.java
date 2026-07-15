@@ -28,6 +28,8 @@ public interface RentalService {
 
     RentalResponse updateBalance(UUID id, UpdateBalanceRequest req);
 
+    RentalResponse cancelRental(UUID id, UUID userId, String role);
+
     void markOverdueRentals();
 
     void markActiveRentals();
