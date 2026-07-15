@@ -28,6 +28,7 @@ public class ReviewServiceImpl implements ReviewService {
     private final UserRepository userRepository;
 
     @Override
+    @Transactional(readOnly = true)
     public List<ReviewResponse> getApprovedReviews(UUID productId) {
         verifyProductExists(productId);
         return reviewRepository
@@ -80,6 +81,7 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<ReviewResponse> getPendingReviews() {
         return reviewRepository.findByStatus(ReviewStatus.PENDING)
                 .stream()
@@ -88,6 +90,7 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<ReviewResponse> getReviewsByStatus(ReviewStatus status) {
         return reviewRepository.findByStatus(status)
                 .stream()

@@ -15,7 +15,7 @@ import java.util.UUID;
 public class ProductImage {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -26,6 +26,9 @@ public class ProductImage {
 
     @Column(nullable = false, length = 500)
     private String url;
+
+    @Column(name = "public_id", length = 255)
+    private String publicId;
 
     @Column(name = "display_order")
     private Integer displayOrder = 0;

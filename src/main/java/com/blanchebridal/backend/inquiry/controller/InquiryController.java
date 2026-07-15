@@ -38,7 +38,7 @@ public class InquiryController {
 
     // ADMIN + EMPLOYEE
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN','SUPERADMIN','EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN','EMPLOYEE')")
     public ResponseEntity<?> getAll(
             @RequestParam(required = false) InquiryStatus status,
             @RequestParam(defaultValue = "0") int page,
@@ -57,14 +57,14 @@ public class InquiryController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPERADMIN','EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN','EMPLOYEE')")
     public ResponseEntity<?> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(Map.of("success", true,
                 "data", inquiryService.getInquiryById(id)));
     }
 
     @PutMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPERADMIN','EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN','EMPLOYEE')")
     public ResponseEntity<?> updateStatus(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateInquiryStatusRequest req) {
@@ -105,7 +105,7 @@ public class InquiryController {
     }
 
     @PostMapping("/{id}/reply")
-    @PreAuthorize("hasAnyRole('ADMIN','SUPERADMIN','EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN','EMPLOYEE')")
     public ResponseEntity<?> replyToInquiry(
             @PathVariable UUID id,
             @Valid @RequestBody SendInquiryReplyRequest req) {

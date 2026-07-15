@@ -36,7 +36,7 @@ public class ReceiptController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> getAllReceipts(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -57,7 +57,7 @@ public class ReceiptController {
 
     // GET /api/receipts/{id}/pdf — returns Cloudinary URL
     @GetMapping("/{id}/pdf")
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> getReceiptPdfUrl(
             @PathVariable UUID id,
             @AuthenticationPrincipal User user) {

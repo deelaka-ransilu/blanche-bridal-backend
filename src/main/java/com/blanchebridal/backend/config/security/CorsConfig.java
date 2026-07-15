@@ -1,64 +1,31 @@
 package com.blanchebridal.backend.config.security;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.List;
 
 @Configuration
-public class CorsConfig implements WebMvcConfigurer {
+public class CorsConfig {
 
-    @Override
-    public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/api/**")
-                .allowedOrigins(
-                        "http://localhost:3000",
-                        "http://localhost:3001",
-                        "https://c16a-112-134-170-216.ngrok-free.app/"
-                )
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                .allowedHeaders("*")
-                .allowCredentials(true)
-                .maxAge(3600);
-
-        registry.addMapping("/actuator/**")          // ← ADDED
-                .allowedOrigins(
-                        "http://localhost:3000",
-                        "http://localhost:3001"
-                )
-                .allowedMethods("GET", "OPTIONS")
-                .allowedHeaders("*")
-                .allowCredentials(true)
-                .maxAge(3600);
-    }
+    @Value("${app.frontend-url}")
+    private String frontendUrl;
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        CorsConfiguration apiConfig = new CorsConfiguration();
-        apiConfig.setAllowedOrigins(List.of(
-                "http://localhost:3000"
-        ));
-        apiConfig.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        apiConfig.setAllowedHeaders(List.of("*"));
-        apiConfig.setAllowCredentials(true);
-        apiConfig.setMaxAge(3600L);
-
-        CorsConfiguration actuatorConfig = new CorsConfiguration();  // ← ADDED
-        actuatorConfig.setAllowedOrigins(List.of("http://localhost:3000"));
-        actuatorConfig.setAllowedMethods(List.of("GET", "OPTIONS"));
-        actuatorConfig.setAllowedHeaders(List.of("*"));
-        actuatorConfig.setAllowCredentials(true);
-        actuatorConfig.setMaxAge(3600L);
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(List.of(frontendUrl));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("*"));
+        config.setAllowCredentials(true); // needed for httpOnly cookie refresh token
+        config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/api/**", apiConfig);
-        source.registerCorsConfiguration("/actuator/**", actuatorConfig);  // ← ADDED
-
+        source.registerCorsConfiguration("/**", config);
         return source;
     }
 }

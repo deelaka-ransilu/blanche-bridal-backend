@@ -2,7 +2,6 @@ package com.blanchebridal.backend.user.controller;
 
 import com.blanchebridal.backend.auth.security.JwtUtil;
 import com.blanchebridal.backend.exception.UnauthorizedException;
-import com.blanchebridal.backend.user.dto.req.MeasurementsRequest;
 import com.blanchebridal.backend.user.dto.req.UpdateProfileRequest;
 import com.blanchebridal.backend.user.dto.res.MeasurementsResponse;
 import com.blanchebridal.backend.user.dto.res.UserResponse;
@@ -11,7 +10,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -54,31 +52,6 @@ public class UserController {
             @RequestHeader("Authorization") String authHeader) {
 
         List<MeasurementsResponse> list = userService.getMeasurements(extractUserId(authHeader));
-        return ResponseEntity.ok(Map.of("success", true, "data", list));
-    }
-
-    // POST /api/users/{customerId}/measurements — admin records for a customer
-    @PostMapping("/{customerId}/measurements")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
-    public ResponseEntity<Map<String, Object>> recordMeasurements(
-            @RequestHeader("Authorization") String authHeader,
-            @PathVariable UUID customerId,
-            @Valid @RequestBody MeasurementsRequest request) {
-
-        UUID adminId = extractUserId(authHeader);
-        log.info("[User] Measurements recorded — customer: {}, by admin: {}",
-                customerId, adminId);
-        MeasurementsResponse saved = userService.saveMeasurements(customerId, adminId, request);
-        return ResponseEntity.ok(Map.of("success", true, "data", saved));
-    }
-
-    // GET /api/users/{customerId}/measurements — admin views customer history
-    @GetMapping("/{customerId}/measurements")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
-    public ResponseEntity<Map<String, Object>> getCustomerMeasurements(
-            @PathVariable UUID customerId) {
-
-        List<MeasurementsResponse> list = userService.getMeasurements(customerId);
         return ResponseEntity.ok(Map.of("success", true, "data", list));
     }
 

@@ -3,7 +3,6 @@ package com.blanchebridal.backend.payment.service.impl;
 import com.blanchebridal.backend.exception.ResourceNotFoundException;
 import com.blanchebridal.backend.exception.UnauthorizedException;
 import com.blanchebridal.backend.order.entity.Order;
-import com.blanchebridal.backend.order.entity.OrderItem;
 import com.blanchebridal.backend.order.entity.OrderStatus;
 import com.blanchebridal.backend.order.repository.OrderRepository;
 import com.blanchebridal.backend.payment.dto.res.PaymentInitiateResponse;
@@ -15,8 +14,8 @@ import com.blanchebridal.backend.payment.repository.PaymentRepository;
 import com.blanchebridal.backend.payment.service.PaymentService;
 import com.blanchebridal.backend.payment.service.ReceiptService;
 import com.blanchebridal.backend.payment.util.PayHereUtil;
-import com.blanchebridal.backend.product.entity.Product;
-import com.blanchebridal.backend.product.repository.ProductRepository;
+import com.blanchebridal.backend.rental.entity.RentalStatus;
+import com.blanchebridal.backend.rental.repository.RentalRepository;
 import com.blanchebridal.backend.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,8 +33,8 @@ import java.util.UUID;
 public class PaymentServiceImpl implements PaymentService {
 
     private final PaymentRepository  paymentRepository;
-    private final OrderRepository    orderRepository;
-    private final ProductRepository  productRepository;
+    private final OrderRepository orderRepository;
+    private final RentalRepository   rentalRepository;
     private final PayHereUtil        payHereUtil;
     private final ReceiptService     receiptService;
 
@@ -52,6 +51,11 @@ public class PaymentServiceImpl implements PaymentService {
 
         if (order.getUser() == null || !order.getUser().getId().equals(userId)) {
             throw new UnauthorizedException("Access denied to this order");
+        }
+
+        if (order.getPaymentMethod() == PaymentMethod.CASH) {
+            throw new IllegalStateException(
+                    "This order uses cash payment — use the confirm-cash endpoint instead");
         }
 
         if (order.getStatus() != OrderStatus.PENDING) {
@@ -123,8 +127,6 @@ public class PaymentServiceImpl implements PaymentService {
         if (!"2".equals(statusCode)) {
             log.info("PayHere non-success status {} for order {}", statusCode, orderId);
 
-            // Mark the payment as FAILED for non-success codes so the order
-            // scheduler can later clean up PENDING orders.
             if ("0".equals(statusCode) || "-1".equals(statusCode) || "-2".equals(statusCode) || "-3".equals(statusCode)) {
                 paymentRepository.findByPayhereOrderId(orderId).ifPresent(payment -> {
                     payment.setStatus(PaymentStatus.FAILED);
@@ -137,7 +139,6 @@ public class PaymentServiceImpl implements PaymentService {
 
         paymentRepository.findByPayhereOrderId(orderId).ifPresentOrElse(payment -> {
 
-            // Guard against duplicate webhook delivery
             if (payment.getStatus() == PaymentStatus.COMPLETED) {
                 log.info("Duplicate webhook received for already-completed order {}. Ignoring.", orderId);
                 return;
@@ -154,24 +155,71 @@ public class PaymentServiceImpl implements PaymentService {
 
             log.info("Payment COMPLETED for order {}. PayHere ID: {}", orderId, payherePaymentId);
 
-            // Deduct stock now that payment is confirmed.
-            // This is the ONLY place stock is reduced — createOrder() does not touch stock.
-            if (order.getItems() != null) {
-                for (OrderItem item : order.getItems()) {
-                    Product product = item.getProduct();
-                    if (product != null) {
-                        int newStock = Math.max(0, product.getStock() - item.getQuantity());
-                        product.setStock(newStock);
-                        productRepository.save(product);
-                        log.info("[Stock] Reduced stock for product {} ('{}') by {}. New stock: {}",
-                                product.getId(), product.getName(), item.getQuantity(), newStock);
-                    }
-                }
+            if (Boolean.TRUE.equals(order.getIsRentalDeposit())) {
+                handleRentalDepositConfirmed(order);
             }
+            // NOTE: stock is NOT touched here. OrderServiceImpl.createOrder
+            // already reserves (decrements) stock at order creation time,
+            // under a pessimistic lock, so the order can never oversell
+            // between creation and confirmation. Decrementing again on
+            // payment confirmation would double-count every purchase order.
+            // If the order is later cancelled or expires while still
+            // PENDING, OrderServiceImpl.restoreStock() gives the reservation
+            // back — that's the single release path for reserved stock.
 
             receiptService.generateReceipt(order, payment);
 
         }, () -> log.warn("Webhook received for unknown payhereOrderId: {}", orderId));
+    }
+
+    @Override
+    @Transactional
+    public PaymentStatusResponse confirmCashPayment(UUID orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
+
+        if (order.getPaymentMethod() != PaymentMethod.CASH) {
+            throw new IllegalStateException("Order is not set up for cash payment");
+        }
+
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new IllegalStateException(
+                    "Order cannot be confirmed — current status: " + order.getStatus());
+        }
+
+        Payment payment = paymentRepository.findByOrder_Id(orderId)
+                .orElseGet(() -> Payment.builder()
+                        .order(order)
+                        .amount(order.getTotalAmount())
+                        .method(PaymentMethod.CASH)
+                        .status(PaymentStatus.PENDING)
+                        .build());
+
+        if (payment.getStatus() == PaymentStatus.COMPLETED) {
+            log.info("[Payment] Cash payment already confirmed for order {}. Ignoring.", orderId);
+            return PaymentStatusResponse.builder().status(PaymentStatus.COMPLETED.name()).build();
+        }
+
+        payment.setStatus(PaymentStatus.COMPLETED);
+        payment.setPaidAt(LocalDateTime.now());
+        paymentRepository.save(payment);
+
+        order.setStatus(OrderStatus.CONFIRMED);
+        orderRepository.save(order);
+
+        log.info("[Payment] Cash payment CONFIRMED for order {}", orderId);
+
+        if (Boolean.TRUE.equals(order.getIsRentalDeposit())) {
+            handleRentalDepositConfirmed(order);
+        }
+        // NOTE: stock is NOT touched here — see the matching note in
+        // handleWebhook(). createOrder() already reserved this order's stock
+        // at creation time; confirming payment (cash or PayHere) must not
+        // decrement it again.
+
+        receiptService.generateReceipt(order, payment);
+
+        return PaymentStatusResponse.builder().status(PaymentStatus.COMPLETED.name()).build();
     }
 
     @Override
@@ -191,5 +239,29 @@ public class PaymentServiceImpl implements PaymentService {
                 .orElse(PaymentStatusResponse.builder()
                         .status(PaymentStatus.PENDING.name())
                         .build());
+    }
+
+    // ─── Rental-deposit hook ────────────────────────────────────────────────
+
+    /**
+     * Called from handleWebhook() and confirmCashPayment() when the confirmed
+     * order is a synthetic rental-deposit order (Order.isRentalDeposit = true).
+     * Flips the linked Rental from PENDING_PAYMENT -> BOOKED. Does NOT touch
+     * Product.stock — rentals don't deduct stock (STEP_4B_RESCOPE.md decision #4).
+     * BOOKED -> ACTIVE is scheduler-driven on rentalStart, not done here.
+     */
+    private void handleRentalDepositConfirmed(Order order) {
+        rentalRepository.findByOrder_Id(order.getId()).ifPresentOrElse(rental -> {
+            if (rental.getStatus() != RentalStatus.PENDING_PAYMENT) {
+                log.info("[Rental] Order {} confirmed but linked rental {} already in status {} — skipping transition.",
+                        order.getId(), rental.getId(), rental.getStatus());
+                return;
+            }
+            rental.setStatus(RentalStatus.BOOKED);
+            rentalRepository.save(rental);
+            log.info("[Rental] Rental {} for order {} transitioned PENDING_PAYMENT -> BOOKED.",
+                    rental.getId(), order.getId());
+        }, () -> log.warn("[Rental] Order {} flagged isRentalDeposit=true but no linked Rental found.",
+                order.getId()));
     }
 }

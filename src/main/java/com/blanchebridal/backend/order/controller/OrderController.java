@@ -4,6 +4,7 @@ import com.blanchebridal.backend.auth.security.JwtUtil;
 import com.blanchebridal.backend.exception.UnauthorizedException;
 import com.blanchebridal.backend.order.dto.req.CreateOrderRequest;
 import com.blanchebridal.backend.order.dto.req.UpdateOrderStatusRequest;
+import com.blanchebridal.backend.order.dto.res.OrderResponse;
 import com.blanchebridal.backend.order.entity.OrderStatus;
 import com.blanchebridal.backend.order.service.OrderService;
 import jakarta.validation.Valid;
@@ -32,7 +33,7 @@ public class OrderController {
     private final JwtUtil jwtUtil;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> getAllOrders(
             @RequestParam(required = false) OrderStatus status,
             @RequestParam(defaultValue = "0") int page,
@@ -79,7 +80,7 @@ public class OrderController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> getOrderById(
             @PathVariable UUID id,
             @RequestHeader("Authorization") String authHeader) {
@@ -91,20 +92,21 @@ public class OrderController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('CUSTOMER')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> createOrder(
             @RequestHeader("Authorization") String authHeader,
             @Valid @RequestBody CreateOrderRequest request) {
 
-        UUID userId = extractUserId(authHeader);
-        log.info("[Order] Create request — user: {}, items: {}",
-                userId, request.getItems() != null ? request.getItems().size() : 0);
+        UUID callerId = extractUserId(authHeader);
+        String role = extractRole();
+        log.info("[Order] Create request — caller: {}, role: {}, items: {}",
+                callerId, role, request.getItems() != null ? request.getItems().size() : 0);
         return ResponseEntity.ok(Map.of("success", true,
-                "data", orderService.createOrder(request, userId)));
+                "data", orderService.createOrder(request, callerId, role)));
     }
 
     @PutMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> updateOrderStatus(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateOrderStatusRequest request) {

@@ -18,5 +18,5 @@ public record CreateProductRequest(
         BigDecimal purchasePrice,
         @NotNull @Min(0) Integer stock,
         List<String> sizes,
-        List<String> imageUrls
+        List<ProductImageInput> images
 ) {}

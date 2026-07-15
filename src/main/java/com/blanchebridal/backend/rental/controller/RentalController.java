@@ -4,6 +4,7 @@ import com.blanchebridal.backend.auth.security.JwtUtil;
 import com.blanchebridal.backend.exception.UnauthorizedException;
 import com.blanchebridal.backend.rental.dto.req.CreateRentalRequest;
 import com.blanchebridal.backend.rental.dto.req.MarkReturnedRequest;
+import com.blanchebridal.backend.rental.dto.req.RentalBookingRequest;
 import com.blanchebridal.backend.rental.dto.req.UpdateBalanceRequest;
 import com.blanchebridal.backend.rental.entity.RentalStatus;
 import com.blanchebridal.backend.rental.service.RentalService;
@@ -34,7 +35,7 @@ public class RentalController {
 
     // ADMIN + EMPLOYEE — all rentals, optional status filter
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> getAllRentals(
             @RequestParam(required = false) RentalStatus status,
             @RequestParam(defaultValue = "0") int page,
@@ -71,7 +72,7 @@ public class RentalController {
 
     // CUSTOMER (own) + ADMIN + EMPLOYEE
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> getRentalById(
             @PathVariable UUID id,
             @RequestHeader("Authorization") String authHeader) {
@@ -86,7 +87,7 @@ public class RentalController {
 
     // ADMIN + EMPLOYEE — create rental on behalf of customer
     @PostMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> createRental(
             @Valid @RequestBody CreateRentalRequest request) {
 
@@ -99,9 +100,45 @@ public class RentalController {
         ));
     }
 
+    // CUSTOMER (own) — cancel a rental booking before it's active
+    @PostMapping("/{id}/cancel")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE')")
+    public ResponseEntity<Map<String, Object>> cancelRental(
+            @PathVariable UUID id,
+            @RequestHeader("Authorization") String authHeader) {
+
+        UUID userId = extractUserId(authHeader);
+        String role = extractRole();
+
+        log.info("[Rental] Cancel request — rental: {}, user: {}", id, userId);
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "data", rentalService.cancelRental(id, userId, role)
+        ));
+    }
+
+    // CUSTOMER — self-service rental booking (Step 4b)
+    @PostMapping("/book")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<Map<String, Object>> bookRental(
+            @Valid @RequestBody RentalBookingRequest request,
+            @RequestHeader("Authorization") String authHeader) {
+
+        UUID userId = extractUserId(authHeader);
+
+        log.info("[Rental] Booking request — customer: {}, product: {}, start: {}, end: {}",
+                userId, request.getProductId(), request.getRentalStart(),
+                request.getRentalEnd());
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "data", rentalService.bookRental(request, userId)
+        ));
+    }
+
     // ADMIN + EMPLOYEE — mark as returned
     @PutMapping("/{id}/return")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN', 'EMPLOYEE')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> markReturned(
             @PathVariable UUID id,
             @Valid @RequestBody MarkReturnedRequest request) {
@@ -116,7 +153,7 @@ public class RentalController {
 
     // ADMIN only — update balance due
     @PutMapping("/{id}/balance")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> updateBalance(
             @PathVariable UUID id,
             @Valid @RequestBody UpdateBalanceRequest request) {

@@ -25,13 +25,11 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/admin")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN', 'SUPERADMIN')")
+@PreAuthorize("hasRole('ADMIN')")
 public class AdminController {
 
     private final AdminService adminService;
-
-    // ── Employees ──────────────────────────────────────────────────────────
-
+    
     @GetMapping("/employees")
     public ResponseEntity<Map<String, Object>> listEmployees() {
         return ResponseEntity.ok(Map.of("success", true, "data", adminService.listEmployees()));
@@ -117,7 +115,6 @@ public class AdminController {
             @RequestBody MeasurementsRequest request,
             @AuthenticationPrincipal User currentUser) {
         // JwtFilter sets the full User entity as principal — cast and use getId() directly.
-        // No employee list lookup needed; works for ADMIN and SUPERADMIN roles.
         UUID adminId = currentUser.getId();
         log.info("[Admin] Add measurement for customer → id: {}, recorded by: {}", customerId, adminId);
         MeasurementsResponse res = adminService.addMeasurement(customerId, request, adminId);
@@ -132,5 +129,29 @@ public class AdminController {
         log.info("[Admin] Update measurement {} for customer {}", measurementId, customerId);
         MeasurementsResponse res = adminService.updateMeasurement(customerId, measurementId, request);
         return ResponseEntity.ok(Map.of("success", true, "data", res));
+    }
+
+    @GetMapping("/admins")
+    public ResponseEntity<Map<String, Object>> listAdmins() {
+        return ResponseEntity.ok(Map.of("success", true, "data", adminService.listAdmins()));
+    }
+
+    @PostMapping("/admins")
+    public ResponseEntity<Map<String, Object>> createAdmin(
+            @Valid @RequestBody CreateUserRequest request) {
+        log.info("[Admin] Create admin → email: {}", request.email());
+        return ResponseEntity.ok(Map.of("success", true, "data", adminService.createAdmin(request)));
+    }
+
+    @PutMapping("/admins/{adminId}/deactivate")
+    public ResponseEntity<Map<String, Object>> deactivateAdmin(@PathVariable UUID adminId) {
+        log.info("[Admin] Deactivate admin → id: {}", adminId);
+        return ResponseEntity.ok(Map.of("success", true, "data", adminService.deactivateAdmin(adminId)));
+    }
+
+    @PutMapping("/admins/{adminId}/activate")
+    public ResponseEntity<Map<String, Object>> activateAdmin(@PathVariable UUID adminId) {
+        log.info("[Admin] Activate admin → id: {}", adminId);
+        return ResponseEntity.ok(Map.of("success", true, "data", adminService.activateAdmin(adminId)));
     }
 }

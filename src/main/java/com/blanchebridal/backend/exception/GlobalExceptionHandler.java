@@ -3,6 +3,8 @@ package com.blanchebridal.backend.exception;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -13,6 +15,13 @@ import java.util.Map;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataIntegrityViolation(
+            org.springframework.dao.DataIntegrityViolationException ex) {
+        return buildError("CONFLICT", "This action conflicts with existing data", HttpStatus.CONFLICT);
+    }
+
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<Map<String, Object>> handleNotFound(ResourceNotFoundException ex) {
@@ -29,21 +38,35 @@ public class GlobalExceptionHandler {
         return buildError("CONFLICT", ex.getMessage(), HttpStatus.CONFLICT);
     }
 
+    // NEW: covers BadCredentialsException and any other Spring Security auth failure
+    // (wrong password, disabled account, etc.) — was previously falling into the
+    // generic Exception handler below and returning 500 instead of 401.
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<Map<String, Object>> handleAuthentication(AuthenticationException ex) {
+        return buildError("UNAUTHORIZED", "Invalid email or password", HttpStatus.UNAUTHORIZED);
+    }
+
+    // NEW: covers AccessDeniedException and its subclass AuthorizationDeniedException
+    // (thrown by @PreAuthorize / hasRole checks) — was previously falling into the
+    // generic Exception handler below and returning 500 instead of 403.
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException ex) {
+        return buildError("FORBIDDEN", "You do not have permission to perform this action", HttpStatus.FORBIDDEN);
+    }
+
+    // MethodArgumentNotValidException — NEW (flat shape, matches buildError)
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidation(MethodArgumentNotValidException ex) {
         Map<String, String> fields = new HashMap<>();
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
             fields.put(error.getField(), error.getDefaultMessage());
         }
-        Map<String, Object> error = new HashMap<>();
-        error.put("code", "VALIDATION_ERROR");
-        error.put("message", "Validation failed");
-        error.put("status", 400);
-        error.put("fields", fields);
 
         Map<String, Object> response = new HashMap<>();
         response.put("success", false);
-        response.put("error", error);
+        response.put("message", "Validation failed");
+        response.put("error", "VALIDATION_ERROR");
+        response.put("fields", fields);
         return ResponseEntity.badRequest().body(response);
     }
 
@@ -63,16 +86,19 @@ public class GlobalExceptionHandler {
         return buildError("INTERNAL_ERROR", "Something went wrong", HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
+    // IllegalStateException — NEW (just delegate to buildError, same as the others)
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Map<String, Object>> handleIllegalState(IllegalStateException ex) {
-        return ResponseEntity.badRequest().body(Map.of(
-                "success", false,
-                "error", Map.of(
-                        "code", "BUSINESS_RULE_VIOLATION",
-                        "message", ex.getMessage(),
-                        "status", 400
-                )
-        ));
+        return buildError("BUSINESS_RULE_VIOLATION", ex.getMessage(), HttpStatus.BAD_REQUEST);
+    }
+
+    // IllegalArgumentException — NEW. Previously had no handler and fell through to the
+    // generic Exception handler, incorrectly returning 500 for what is really bad client
+    // input (e.g. missing required field in a staff-only code path). Mirrors the
+    // IllegalStateException handler below.
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalArgument(IllegalArgumentException ex) {
+        return buildError("BAD_REQUEST", ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
 
     private ResponseEntity<Map<String, Object>> buildError(
@@ -84,5 +110,12 @@ public class GlobalExceptionHandler {
         response.put("error", code);
 
         return ResponseEntity.status(status).body(response);
+    }
+
+    @ExceptionHandler(org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Map<String, Object>> handleTypeMismatch(
+            org.springframework.web.method.annotation.MethodArgumentTypeMismatchException ex) {
+        return buildError("BAD_REQUEST",
+                "Invalid value for parameter: " + ex.getName(), HttpStatus.BAD_REQUEST);
     }
 }

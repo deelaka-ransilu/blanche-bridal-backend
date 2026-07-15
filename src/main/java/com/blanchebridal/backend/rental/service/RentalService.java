@@ -1,6 +1,7 @@
 package com.blanchebridal.backend.rental.service;
 
 import com.blanchebridal.backend.rental.dto.req.CreateRentalRequest;
+import com.blanchebridal.backend.rental.dto.req.RentalBookingRequest;
 import com.blanchebridal.backend.rental.dto.req.UpdateBalanceRequest;
 import com.blanchebridal.backend.rental.dto.res.RentalResponse;
 import com.blanchebridal.backend.rental.entity.RentalStatus;
@@ -15,6 +16,8 @@ public interface RentalService {
 
     RentalResponse createRental(CreateRentalRequest req);
 
+    RentalResponse bookRental(RentalBookingRequest req, UUID callerId);
+
     Page<RentalResponse> getAllRentals(RentalStatus status, Pageable pageable);
 
     List<RentalResponse> getMyRentals(UUID userId);
@@ -25,5 +28,13 @@ public interface RentalService {
 
     RentalResponse updateBalance(UUID id, UpdateBalanceRequest req);
 
+    RentalResponse cancelRental(UUID id, UUID userId, String role);
+
     void markOverdueRentals();
+
+    void markActiveRentals();
+
+    // New: cancels PENDING_PAYMENT rentals (and their synthetic order) once
+    // 48h have passed since the requested pickup date with no cash paid.
+    void expireStaleBookings();
 }

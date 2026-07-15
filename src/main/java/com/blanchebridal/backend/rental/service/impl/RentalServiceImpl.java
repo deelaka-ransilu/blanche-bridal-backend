@@ -1,13 +1,19 @@
 package com.blanchebridal.backend.rental.service.impl;
 
+import com.blanchebridal.backend.exception.ConflictException;
+import com.blanchebridal.backend.order.repository.OrderRepository;
+import com.blanchebridal.backend.payment.entity.PaymentMethod;
 import com.blanchebridal.backend.shared.email.EmailService;
 import com.blanchebridal.backend.exception.ResourceNotFoundException;
 import com.blanchebridal.backend.exception.UnauthorizedException;
 import com.blanchebridal.backend.order.entity.Order;
-import com.blanchebridal.backend.order.repository.OrderRepository;
+import com.blanchebridal.backend.order.entity.OrderItem;
+import com.blanchebridal.backend.order.entity.OrderMode;
+import com.blanchebridal.backend.order.entity.OrderStatus;
 import com.blanchebridal.backend.product.entity.Product;
 import com.blanchebridal.backend.product.repository.ProductRepository;
 import com.blanchebridal.backend.rental.dto.req.CreateRentalRequest;
+import com.blanchebridal.backend.rental.dto.req.RentalBookingRequest;
 import com.blanchebridal.backend.rental.dto.req.UpdateBalanceRequest;
 import com.blanchebridal.backend.rental.dto.res.RentalResponse;
 import com.blanchebridal.backend.rental.entity.Rental;
@@ -23,7 +29,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -47,7 +55,6 @@ public class RentalServiceImpl implements RentalService {
         Product product = productRepository.findById(req.getProductId())
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
-        // Block if product is already out on an active or overdue rental
         boolean alreadyRented = rentalRepository.existsByProduct_IdAndStatusIn(
                 req.getProductId(), List.of(RentalStatus.ACTIVE, RentalStatus.OVERDUE));
         if (alreadyRented) {
@@ -69,9 +76,98 @@ public class RentalServiceImpl implements RentalService {
                 .rentalEnd(req.getRentalEnd())
                 .depositAmount(req.getDepositAmount())
                 .notes(req.getNotes())
+                .status(RentalStatus.ACTIVE)
                 .build();
 
         return toResponse(rentalRepository.save(rental));
+    }
+
+    @Override
+    @Transactional
+    public RentalResponse bookRental(RentalBookingRequest req, UUID callerId) {
+        User user = userRepository.findById(callerId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        Product product = productRepository.findById(req.getProductId())
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
+
+        if (Boolean.FALSE.equals(product.getIsActive()) || Boolean.FALSE.equals(product.getIsAvailable())) {
+            throw new IllegalStateException("Product is not available: " + product.getName());
+        }
+
+        if (product.getRentalPrice() == null && product.getRentalPricePerDay() == null) {
+            throw new IllegalStateException("Product is not available for rental: " + product.getName());
+        }
+
+        if (!req.getRentalEnd().isAfter(req.getRentalStart())) {
+            throw new IllegalArgumentException("Rental end date must be after start date");
+        }
+
+        if (req.getRentalStart().isBefore(LocalDate.now())) {
+            throw new IllegalArgumentException("Rental start date cannot be in the past");
+        }
+
+        boolean alreadyRented = rentalRepository.existsByProduct_IdAndStatusIn(
+                req.getProductId(), List.of(RentalStatus.ACTIVE, RentalStatus.OVERDUE));
+        if (alreadyRented) {
+            throw new IllegalStateException(
+                    "Product is currently rented out and not yet returned");
+        }
+
+        // Per-day pricing takes priority when set on the product; otherwise
+        // fall back to the flat one-time rentalPrice fee (legacy behavior,
+        // still used by any product without a per-day rate configured).
+        BigDecimal rentalFee;
+        long days = ChronoUnit.DAYS.between(req.getRentalStart(), req.getRentalEnd());
+        if (product.getRentalPricePerDay() != null) {
+            rentalFee = product.getRentalPricePerDay().multiply(BigDecimal.valueOf(days));
+        } else {
+            rentalFee = product.getRentalPrice();
+        }
+
+        String imageUrl = (product.getImages() != null && !product.getImages().isEmpty())
+                ? product.getImages().get(0).getUrl()
+                : null;
+
+        OrderItem item = OrderItem.builder()
+                .product(product)
+                .quantity(1)
+                .unitPrice(rentalFee)
+                .productName(product.getName())
+                .productImage(imageUrl)
+                .build();
+
+        Order syntheticOrder = Order.builder()
+                .user(user)
+                .status(OrderStatus.PENDING)
+                .totalAmount(rentalFee)
+                .notes("Rental fee — auto-generated, not a customer purchase order")
+                .orderMode(OrderMode.WEBSITE)
+                .paymentMethod(PaymentMethod.CASH) // rentals are cash-only — decided this session
+                .isRentalDeposit(true)
+                .items(List.of(item))
+                .build();
+
+        item.setOrder(syntheticOrder);
+
+        Order savedOrder = orderRepository.save(syntheticOrder);
+
+        Rental rental = Rental.builder()
+                .user(user)
+                .product(product)
+                .order(savedOrder)
+                .rentalStart(req.getRentalStart())
+                .rentalEnd(req.getRentalEnd())
+                .depositAmount(rentalFee)
+                .status(RentalStatus.PENDING_PAYMENT)
+                .build();
+
+        Rental savedRental = rentalRepository.save(rental);
+
+        log.info("[Rental] Customer {} booked rental for product {} — synthetic order {} created, {} days, rental fee LKR {} (cash, due at pickup)",
+                callerId, req.getProductId(), savedOrder.getId(), days, rentalFee);
+
+        return toResponse(savedRental);
     }
 
     @Override
@@ -134,6 +230,26 @@ public class RentalServiceImpl implements RentalService {
 
     @Override
     @Transactional
+    public RentalResponse cancelRental(UUID id, UUID userId, String role) {
+        Rental rental = rentalRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Rental not found: " + id));
+
+        boolean isOwner = rental.getUser() != null && rental.getUser().getId().equals(userId);
+        boolean isStaff = "ROLE_ADMIN".equals(role) || "ROLE_EMPLOYEE".equals(role);
+        if (!isOwner && !isStaff) {
+            throw new UnauthorizedException("Not authorized to cancel this rental");
+        }
+
+        if (rental.getStatus() != RentalStatus.PENDING_PAYMENT && rental.getStatus() != RentalStatus.BOOKED) {
+            throw new ConflictException("This rental can no longer be cancelled");
+        }
+
+        rental.setStatus(RentalStatus.CANCELLED);
+        return toResponse(rentalRepository.save(rental));
+    }
+
+    @Override
+    @Transactional
     public void markOverdueRentals() {
         List<Rental> overdueRentals = rentalRepository
                 .findByStatusAndRentalEndBefore(RentalStatus.ACTIVE, LocalDate.now());
@@ -166,6 +282,64 @@ public class RentalServiceImpl implements RentalService {
         }
 
         log.info("[RentalScheduler] Marked {} rental(s) as OVERDUE.", overdueRentals.size());
+    }
+
+    @Override
+    @Transactional
+    public void markActiveRentals() {
+        List<Rental> toActivate = rentalRepository
+                .findByStatusAndRentalStartLessThanEqual(RentalStatus.BOOKED, LocalDate.now());
+
+        if (toActivate.isEmpty()) {
+            log.info("[RentalScheduler] No rentals to activate.");
+            return;
+        }
+
+        for (Rental rental : toActivate) {
+            rental.setStatus(RentalStatus.ACTIVE);
+            rentalRepository.save(rental);
+            log.info("[RentalScheduler] Rental {} transitioned BOOKED -> ACTIVE (start date {} reached).",
+                    rental.getId(), rental.getRentalStart());
+        }
+
+        log.info("[RentalScheduler] Activated {} rental(s).", toActivate.size());
+    }
+
+    // ─── New: 48h auto-expiry of unpaid bookings ───────────────────────────
+    // Decided this session: item stays unlocked/unreserved until cash is paid.
+    // If nobody's paid by 48h after the requested pickup (rentalStart) date,
+    // cancel the booking and its synthetic order so it stops cluttering the
+    // admin dashboard. Reuses the same repo method markActiveRentals() uses,
+    // just against PENDING_PAYMENT with a 2-day-old cutoff (rentalStart is a
+    // LocalDate, so date-level granularity is the best available precision).
+    @Override
+    @Transactional
+    public void expireStaleBookings() {
+        LocalDate cutoff = LocalDate.now().minusDays(2);
+
+        List<Rental> toExpire = rentalRepository
+                .findByStatusAndRentalStartLessThanEqual(RentalStatus.PENDING_PAYMENT, cutoff);
+
+        if (toExpire.isEmpty()) {
+            log.info("[RentalScheduler] No stale PENDING_PAYMENT bookings to expire.");
+            return;
+        }
+
+        for (Rental rental : toExpire) {
+            rental.setStatus(RentalStatus.CANCELLED);
+            rentalRepository.save(rental);
+
+            Order order = rental.getOrder();
+            if (order != null && order.getStatus() == OrderStatus.PENDING) {
+                order.setStatus(OrderStatus.CANCELLED);
+                orderRepository.save(order);
+            }
+
+            log.info("[RentalScheduler] Rental {} expired — no cash payment received within 48h of requested pickup date {}.",
+                    rental.getId(), rental.getRentalStart());
+        }
+
+        log.info("[RentalScheduler] Expired {} stale rental booking(s).", toExpire.size());
     }
 
     // ─── Mapper ───────────────────────────────────────────────────────────────

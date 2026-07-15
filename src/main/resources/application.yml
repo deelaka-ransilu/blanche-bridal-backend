@@ -6,8 +6,9 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: none
     show-sql: false
+    open-in-view: false
 
   flyway:
     enabled: true
@@ -28,7 +29,7 @@ server:
   port: 8080
 
 jwt:
-  expiration: 86400000
+  expiration: 900000
 
 app:
   frontend-url: http://localhost:3000

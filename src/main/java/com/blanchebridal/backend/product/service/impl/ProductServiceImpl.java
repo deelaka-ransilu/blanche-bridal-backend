@@ -6,6 +6,7 @@ import com.blanchebridal.backend.product.repository.ProductImageRepository;
 import com.blanchebridal.backend.product.spec.ProductSpecification;
 import com.blanchebridal.backend.product.dto.*;
 import com.blanchebridal.backend.product.dto.req.CreateProductRequest;
+import com.blanchebridal.backend.product.dto.req.ProductImageInput;
 import com.blanchebridal.backend.product.dto.req.UpdateProductRequest;
 import com.blanchebridal.backend.product.dto.res.ProductDetailResponse;
 import com.blanchebridal.backend.product.dto.res.ProductSummaryResponse;
@@ -15,21 +16,26 @@ import com.blanchebridal.backend.product.entity.ProductImage;
 import com.blanchebridal.backend.product.repository.CategoryRepository;
 import com.blanchebridal.backend.product.repository.ProductRepository;
 import com.blanchebridal.backend.product.service.ProductService;
+import com.cloudinary.Cloudinary;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ProductServiceImpl implements ProductService {
@@ -38,8 +44,10 @@ public class ProductServiceImpl implements ProductService {
     private final CategoryRepository categoryRepository;
     private final ObjectMapper objectMapper;
     private final ProductImageRepository productImageRepository;
+    private final Cloudinary cloudinary;
 
     @Override
+    @Transactional(readOnly = true)
     public Page<ProductSummaryResponse> getProducts(ProductFilters filters, Pageable pageable) {
         return productRepository
                 .findAll(ProductSpecification.withFilters(filters), pageable)
@@ -47,11 +55,13 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public ProductDetailResponse getProductById(UUID id) {
         return toDetail(findActiveById(id));
     }
 
     @Override
+    @Transactional(readOnly = true)
     public ProductDetailResponse getProductBySlug(String slug) {
         Product product = productRepository.findBySlugAndIsActiveTrue(slug)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + slug));
@@ -87,7 +97,7 @@ public class ProductServiceImpl implements ProductService {
                 .build();
 
         Product saved = productRepository.save(product);
-        attachImages(saved, request.imageUrls());
+        attachImages(saved, request.images());
         return toDetail(productRepository.save(saved));
     }
 
@@ -115,9 +125,11 @@ public class ProductServiceImpl implements ProductService {
             product.setCategory(category);
         }
 
-        if (request.imageUrls() != null) {
+        if (request.images() != null) {
+            // Clean up old images from Cloudinary before replacing
+            product.getImages().forEach(this::destroyOnCloudinaryQuietly);
             product.getImages().clear();
-            attachImages(product, request.imageUrls());
+            attachImages(product, request.images());
         }
 
         return toDetail(productRepository.save(product));
@@ -151,12 +163,15 @@ public class ProductServiceImpl implements ProductService {
             throw new ResourceNotFoundException("Image not found on this product");
         }
 
+        destroyOnCloudinaryQuietly(image);
+
         image.setIsActive(false);
         productImageRepository.save(image);
     }
 
     // ── NEW: get all deleted (inactive) products ──────────────────────────────
     @Override
+    @Transactional(readOnly = true)
     public List<ProductSummaryResponse> getDeletedProducts() {
         return productRepository.findByIsActiveFalse()
                 .stream()
@@ -168,7 +183,6 @@ public class ProductServiceImpl implements ProductService {
     @Override
     @Transactional
     public ProductDetailResponse restoreProduct(UUID id) {
-        // Use findByIdAndIsActiveFalse — only inactive products can be restored
         Product product = productRepository.findByIdAndIsActiveFalse(id)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Deleted product not found: " + id));
@@ -178,23 +192,35 @@ public class ProductServiceImpl implements ProductService {
 
     // ── private helpers ───────────────────────────────────────────────────────
 
-    // Renamed from findById to make intent clear — only finds ACTIVE products
     private Product findActiveById(UUID id) {
         return productRepository.findByIdAndIsActiveTrue(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + id));
     }
 
-    private void attachImages(Product product, List<String> urls) {
-        if (urls == null || urls.isEmpty()) return;
+    private void attachImages(Product product, List<ProductImageInput> images) {
+        if (images == null || images.isEmpty()) return;
         AtomicInteger order = new AtomicInteger(0);
-        urls.forEach(url -> {
+        images.forEach(img -> {
             ProductImage image = ProductImage.builder()
                     .product(product)
-                    .url(url)
+                    .url(img.url())
+                    .publicId(img.publicId())
                     .displayOrder(order.getAndIncrement())
                     .build();
             product.getImages().add(image);
         });
+    }
+
+    private void destroyOnCloudinaryQuietly(ProductImage image) {
+        if (image.getPublicId() == null || image.getPublicId().isBlank()) return;
+        try {
+            cloudinary.uploader().destroy(image.getPublicId(), Map.of());
+        } catch (IOException e) {
+            // Don't fail the DB operation over a Cloudinary cleanup failure —
+            // log and move on, orphaned file can be cleaned up manually if needed.
+            log.warn("[Product] Cloudinary destroy failed for publicId {}: {}",
+                    image.getPublicId(), e.getMessage());
+        }
     }
 
     private String slugify(String name) {
@@ -257,7 +283,7 @@ public class ProductServiceImpl implements ProductService {
 
         return new ProductDetailResponse(
                 p.getId(), p.getName(), p.getSlug(), p.getDescription(), p.getType(),
-                p.getRentalPrice(), p.getPurchasePrice(),
+                p.getRentalPrice(), p.getRentalPricePerDay(), p.getPurchasePrice(),
                 p.getStock(), p.getIsAvailable(),
                 fromJson(p.getSizes()), images,
                 null, categoryInfo,

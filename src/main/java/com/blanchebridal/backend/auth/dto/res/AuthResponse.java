@@ -1,6 +1,3 @@
 package com.blanchebridal.backend.auth.dto.res;
 
-public record  AuthResponse(
-        String token,
-        String role
-) {}
+public record AuthResponse(String token, String role, String refreshToken) {}

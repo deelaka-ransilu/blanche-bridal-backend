@@ -74,6 +74,13 @@ public class PaymentController {
         ));
     }
 
+    @PostMapping("/{orderId}/confirm-cash")
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    public ResponseEntity<Map<String, Object>> confirmCashPayment(@PathVariable UUID orderId) {
+        log.info("[Payment] Confirming cash payment for order {}", orderId);
+        return ResponseEntity.ok(Map.of("success", true, "data", paymentService.confirmCashPayment(orderId)));
+    }
+
     private UUID extractUserId(String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             throw new UnauthorizedException("Missing or invalid Authorization header");

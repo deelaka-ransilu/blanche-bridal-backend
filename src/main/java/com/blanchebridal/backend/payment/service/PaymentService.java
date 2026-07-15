@@ -10,4 +10,5 @@ public interface PaymentService {
     PaymentInitiateResponse initiatePayment(UUID orderId, UUID userId);
     void handleWebhook(Map<String, String> params);
     PaymentStatusResponse getPaymentStatus(UUID orderId, UUID userId);
+    PaymentStatusResponse confirmCashPayment(UUID orderId);
 }

@@ -13,9 +13,21 @@ public class RentalScheduler {
 
     private final RentalService rentalService;
 
+    @Scheduled(cron = "0 0 8 * * *") // every minute — TEMP for testing
+    public void detectActiveRentals() {
+        log.info("[RentalScheduler] Running rental activation detection...");
+        rentalService.markActiveRentals();
+    }
+
     @Scheduled(cron = "0 0 8 * * *")
     public void detectOverdueRentals() {
         log.info("[RentalScheduler] Running overdue rental detection...");
         rentalService.markOverdueRentals();
+    }
+
+    @Scheduled(cron = "0 0 8 * * *")
+    public void detectExpiredBookings() {
+        log.info("[RentalScheduler] Running stale booking expiry detection...");
+        rentalService.expireStaleBookings();
     }
 }

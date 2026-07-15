@@ -1,6 +1,7 @@
 package com.blanchebridal.backend.auth.service;
 
 import com.blanchebridal.backend.auth.dto.res.AuthResponse;
+import com.blanchebridal.backend.auth.dto.res.RefreshResponse;
 import com.blanchebridal.backend.auth.dto.req.*;
 
 public interface AuthService {
@@ -12,4 +13,7 @@ public interface AuthService {
     void resendVerification(String email);
     void forgotPassword(String email);
     void resetPassword(String token, String newPassword);
+
+    RefreshResponse refresh(String rawRefreshToken);
+    void logout(String rawRefreshToken);
 }

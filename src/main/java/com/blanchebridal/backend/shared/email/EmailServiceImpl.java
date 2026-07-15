@@ -41,40 +41,39 @@ public class EmailServiceImpl implements EmailService {
         String link = frontendUrl + "/verify-email?token=" + encodedToken;
 
         String html = """
-                <!DOCTYPE html>
-                <html>
-                <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
-                    <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px; text-align:center;">
-                        <h1 style="color:#8b5e57; margin-bottom:10px;">Welcome to Blanche Bridal</h1>
+            <!DOCTYPE html>
+            <html>
+            <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
+                <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px; text-align:center;">
+                    <h1 style="color:#c8102e; margin-bottom:10px;">Welcome to Blanche Bridal</h1>
 
-                        <p style="color:#444444; font-size:16px; line-height:1.6;">
-                            Please verify your email address by clicking the button below.
-                        </p>
+                    <p style="color:#444444; font-size:16px; line-height:1.6;">
+                        Please verify your email address by clicking the button below.
+                    </p>
 
-                        <a href="%s"
-                           style="display:inline-block; margin-top:20px; padding:14px 28px; background-color:#8b5e57; color:#ffffff; text-decoration:none; border-radius:8px; font-weight:bold;">
-                            Verify Email
-                        </a>
+                    <a href="%s"
+                       style="display:inline-block; margin-top:20px; padding:14px 28px; background-color:#c8102e; color:#ffffff; text-decoration:none; border-radius:8px; font-weight:bold;">
+                        Verify Email
+                    </a>
 
-                        <p style="color:#444444; font-size:15px; line-height:1.6; margin-top:24px;">
-                            This link expires in 20 minutes.
-                        </p>
+                    <p style="color:#444444; font-size:15px; line-height:1.6; margin-top:24px;">
+                        This link expires in 24 hours.
+                    </p>
 
-                        <p style="font-size:13px; color:#999999; margin-top:30px;">
-                            If you did not create an account, you can ignore this email.
-                        </p>
+                    <p style="font-size:13px; color:#999999; margin-top:30px;">
+                        If you did not create an account, you can ignore this email.
+                    </p>
 
-                        <p style="font-size:14px; color:#8b5e57; margin-top:28px;">
-                            Blanche Bridal
-                        </p>
-                    </div>
-                </body>
-                </html>
-                """.formatted(link);
+                    <p style="font-size:14px; color:#c8102e; margin-top:28px;">
+                        Blanche Bridal
+                    </p>
+                </div>
+            </body>
+            </html>
+            """.formatted(link);
 
         sendHtmlEmail(toEmail, "Verify your Blanche Bridal account", html);
     }
-
     @Override
     public void sendPasswordResetEmail(String toEmail, String token) {
         String encodedToken = URLEncoder.encode(token, StandardCharsets.UTF_8);

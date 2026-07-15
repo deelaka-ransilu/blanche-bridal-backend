@@ -118,7 +118,7 @@ public class UserServiceImpl implements UserService {
                 u.getLastName(),
                 u.getPhone(),
                 u.getAddress(),   // ← this was missing
-                u.getIsActive(),
+                u.isActive(),
                 u.getCreatedAt()
         );
     }

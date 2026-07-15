@@ -1,6 +1,9 @@
 package com.blanchebridal.backend.order.dto.res;
 
+import com.blanchebridal.backend.order.entity.DiscountType;
+import com.blanchebridal.backend.order.entity.OrderMode;
 import com.blanchebridal.backend.order.entity.OrderStatus;
+import com.blanchebridal.backend.payment.entity.PaymentMethod;
 import lombok.Builder;
 import lombok.Data;
 import java.math.BigDecimal;
@@ -25,5 +28,10 @@ public class OrderResponse {
     private String customerPhone;
     private String fulfillmentMethod;
     private String deliveryAddress;
-    private String orderMode;
+    private OrderMode orderMode;
+    private PaymentMethod paymentMethod;
+    private Boolean isRentalDeposit;
+    private DiscountType discountType;
+    private BigDecimal discountValue;
+    private String discountReason;
 }

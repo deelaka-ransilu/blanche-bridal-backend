@@ -14,7 +14,7 @@ import java.util.UUID;
 public class TimeSlotConfig {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @Column(name = "day_of_week", nullable = false)

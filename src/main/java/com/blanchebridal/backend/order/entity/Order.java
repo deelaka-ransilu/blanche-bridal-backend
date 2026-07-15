@@ -1,5 +1,6 @@
 package com.blanchebridal.backend.order.entity;
 
+import com.blanchebridal.backend.payment.entity.PaymentMethod;
 import com.blanchebridal.backend.user.entity.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -18,7 +19,7 @@ import java.util.UUID;
 public class Order {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -29,6 +30,7 @@ public class Order {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
+    @Builder.Default
     private OrderStatus status = OrderStatus.PENDING;
 
     @Column(name = "total_amount", nullable = false, precision = 10, scale = 2)
@@ -46,8 +48,10 @@ public class Order {
     @Column(name = "customer_phone", length = 20)
     private String customerPhone;
 
-    @Column(name = "order_mode", length = 10)
-    private String orderMode;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "order_mode", nullable = false, length = 10)
+    @Builder.Default
+    private OrderMode orderMode = OrderMode.WEBSITE;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @ToString.Exclude
@@ -61,4 +65,26 @@ public class Order {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "payment_method", nullable = false, length = 20)
+    @Builder.Default
+    private PaymentMethod paymentMethod = PaymentMethod.PAYHERE;
+
+    @Column(name = "is_rental_deposit", nullable = false)
+    @Builder.Default
+    private Boolean isRentalDeposit = false;
+
+    // ── Discount fields (Step 9c, Financial Reporting FR-OM-11) ─────────────
+    // Order-level discount, applied only by staff at order-creation time.
+    // Null discountType = no discount applied.
+    @Enumerated(EnumType.STRING)
+    @Column(name = "discount_type", length = 20)
+    private DiscountType discountType;
+
+    @Column(name = "discount_value", precision = 10, scale = 2)
+    private BigDecimal discountValue;
+
+    @Column(name = "discount_reason")
+    private String discountReason;
 }

@@ -5,7 +5,6 @@ import com.blanchebridal.backend.order.entity.OrderStatus;
 import com.blanchebridal.backend.order.repository.OrderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,7 +33,7 @@ public class OrderScheduler {
 
     private static final int PENDING_TIMEOUT_MINUTES = 30;
 
-    @Scheduled(fixedRate = 300_000) // every 5 minutes
+//    @Scheduled(fixedRate = 300_000) // every 5 minutes
     @Transactional
     public void cancelStaleOrders() {
         LocalDateTime cutoff = LocalDateTime.now().minusMinutes(PENDING_TIMEOUT_MINUTES);

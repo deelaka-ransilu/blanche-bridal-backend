@@ -13,43 +13,49 @@ import java.util.Date;
 @Component
 public class JwtUtil {
 
-    private final String secret;
+    private final SecretKey signingKey;
     private final long expiration;
 
     public JwtUtil(
             @Value("${jwt.secret}") String secret,
             @Value("${jwt.expiration}") long expiration) {
-        this.secret = secret;
+        this.signingKey = Keys.hmacShaKeyFor(secret.getBytes());
         this.expiration = expiration;
-    }
-
-    private SecretKey getSigningKey() {
-        return Keys.hmacShaKeyFor(secret.getBytes());
     }
 
     public String generateToken(User user) {
         return Jwts.builder()
                 .subject(user.getEmail())
-                .claim("role", user.getRole().name())
+                .claim("role",      user.getRole().name())
+                .claim("userId",    user.getId().toString())
                 .claim("firstName", user.getFirstName())
-                .claim("lastName", user.getLastName())
-                .claim("userId", user.getId().toString())
+                .claim("lastName",  user.getLastName())
                 .issuedAt(new Date())
                 .expiration(new Date(System.currentTimeMillis() + expiration))
-                .signWith(getSigningKey())
+                .signWith(signingKey)
                 .compact();
     }
 
+    /**
+     * Validates the token's signature and structure.
+     *
+     * IMPORTANT: this no longer swallows ExpiredJwtException — it now
+     * propagates to the caller (JwtFilter), which needs to distinguish
+     * "expired" (→ 401, triggers client-side refresh) from "malformed/
+     * tampered" (→ pass-through, eventual 403 via SecurityConfig). See
+     * CURRENT_STATE.md Issue #8.
+     *
+     * Any other parsing failure (bad signature, malformed compact string,
+     * unsupported token, illegal argument) still throws — callers that only
+     * care about a boolean should catch broadly themselves; JwtFilter now
+     * does that catch explicitly instead of this method doing it silently.
+     */
     public boolean validateToken(String token) {
-        try {
-            Jwts.parser()
-                    .verifyWith(getSigningKey())
-                    .build()
-                    .parseSignedClaims(token);
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
+        Jwts.parser()
+                .verifyWith(signingKey)
+                .build()
+                .parseSignedClaims(token);
+        return true;
     }
 
     public String extractEmail(String token) {
@@ -66,7 +72,7 @@ public class JwtUtil {
 
     private Claims getClaims(String token) {
         return Jwts.parser()
-                .verifyWith(getSigningKey())
+                .verifyWith(signingKey)
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
