@@ -85,6 +85,9 @@ public class PaymentServiceImpl implements PaymentService {
                      : "")
                 : "Blanche Bridal Order";
 
+        String returnUrlWithOrder = returnUrl + "?orderId=" + order.getId();
+        String cancelUrlWithOrder = cancelUrl + "?orderId=" + order.getId();
+
         return PaymentInitiateResponse.builder()
                 .merchantId(merchantId)
                 .orderId(order.getId().toString())
@@ -98,8 +101,8 @@ public class PaymentServiceImpl implements PaymentService {
                 .customerPhone(user.getPhone()        != null ? user.getPhone()     : "0000000000")
                 .customerAddress("N/A")
                 .customerCity("Colombo")
-                .returnUrl(returnUrl)
-                .cancelUrl(cancelUrl)
+                .returnUrl(returnUrlWithOrder)
+                .cancelUrl(cancelUrlWithOrder)
                 .notifyUrl(notifyUrl)
                 .build();
     }

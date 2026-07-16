@@ -32,10 +32,15 @@ public class Receipt {
     @Column(name = "receipt_number", unique = true, nullable = false, length = 50)
     private String receiptNumber;
 
+    @Column(name = "storage_key", unique = true, nullable = false, length = 100)
+    private String storageKey;
+
     @Column(name = "pdf_url", length = 500)
     private String pdfUrl;
 
     @CreationTimestamp
     @Column(name = "issued_at", updatable = false)
     private LocalDateTime issuedAt;
+
+    private Integer storageVersion;
 }

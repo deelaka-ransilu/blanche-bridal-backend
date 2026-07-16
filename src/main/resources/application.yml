@@ -12,6 +12,7 @@ spring:
 
   flyway:
     enabled: true
+    repair: true
 
   mail:
     host: smtp.gmail.com

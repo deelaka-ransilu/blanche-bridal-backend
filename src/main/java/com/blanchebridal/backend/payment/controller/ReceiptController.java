@@ -70,4 +70,24 @@ public class ReceiptController {
         return ResponseEntity.ok(Map.of("success", true,
                 "data", Map.of("pdfUrl", pdfUrl)));
     }
+
+    @GetMapping("/{id}/download")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE')")
+    public ResponseEntity<byte[]> downloadReceiptPdf(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal User user) throws Exception {
+
+        UUID requestingUserId = user.getId();
+        String role = user.getRole().name();
+
+        byte[] pdfBytes = receiptService.downloadReceiptPdf(id, requestingUserId, role);
+        String filename = receiptService.getReceiptFilename(id, requestingUserId, role);
+
+        log.info("[Receipt] PDF download — receipt: {}, user: {}, role: {}", id, requestingUserId, role);
+
+        return ResponseEntity.ok()
+                .header("Content-Type", "application/pdf")
+                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .body(pdfBytes);
+    }
 }

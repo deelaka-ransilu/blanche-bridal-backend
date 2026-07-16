@@ -34,6 +34,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -61,13 +65,19 @@ public class ReceiptServiceImpl implements ReceiptService {
                 .orElseGet(() -> {
                     try {
                         String receiptNumber = buildNextReceiptNumber();
-                        byte[] pdfBytes     = buildPdf(order, payment, receiptNumber);
-                        String pdfUrl       = uploadToCloudinary(pdfBytes, receiptNumber);
+                        String storageKey    = UUID.randomUUID().toString();
+                        byte[] pdfBytes      = buildPdf(order, payment, receiptNumber);
+
+                        Map<String, Object> uploadResult = uploadToCloudinary(pdfBytes, storageKey);
+                        String pdfUrl   = (String) uploadResult.get("secure_url");
+                        Integer version = (Integer) uploadResult.get("version");
 
                         Receipt receipt = Receipt.builder()
                                 .order(order)
                                 .payment(payment)
                                 .receiptNumber(receiptNumber)
+                                .storageKey(storageKey)
+                                .storageVersion(version)
                                 .pdfUrl(pdfUrl)
                                 .build();
 
@@ -100,6 +110,53 @@ public class ReceiptServiceImpl implements ReceiptService {
     @Override
     @Transactional(readOnly = true)
     public String getReceiptPdfUrl(UUID receiptId, UUID requestingUserId, String role) {
+        return getAuthorizedReceipt(receiptId, requestingUserId, role).getPdfUrl();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] downloadReceiptPdf(UUID receiptId, UUID requestingUserId, String role)
+            throws IOException, InterruptedException {
+
+        Receipt receipt = getAuthorizedReceipt(receiptId, requestingUserId, role);
+
+        // Signed URL for an authenticated-type resource. Cloudinary's signature
+        // for authenticated raw resources is computed including the resource's
+        // version, so it must be included here or the signature is invalid and
+        // Cloudinary returns 401 at fetch time -- captured once at upload time
+        // and stored as receipt.storageVersion.
+        String signedUrl = cloudinary.url()
+                .resourceType("raw")
+                .type("authenticated")
+                .signed(true)
+                .version(receipt.getStorageVersion())
+                .format("pdf")
+                .generate("receipts/" + receipt.getStorageKey());
+
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder(URI.create(signedUrl)).GET().build();
+        HttpResponse<byte[]> response =
+                client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+
+        if (response.statusCode() != 200) {
+            log.error("Cloudinary signed fetch failed for receipt {}: HTTP {}",
+                    receiptId, response.statusCode());
+            throw new RuntimeException("Failed to retrieve receipt PDF from storage");
+        }
+
+        return response.body();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public String getReceiptFilename(UUID receiptId, UUID requestingUserId, String role) {
+        Receipt receipt = getAuthorizedReceipt(receiptId, requestingUserId, role);
+        return receipt.getReceiptNumber() + ".pdf";
+    }
+
+    // ─── Shared ownership check ─────────────────────────────────────────────
+
+    private Receipt getAuthorizedReceipt(UUID receiptId, UUID requestingUserId, String role) {
         Receipt receipt = receiptRepository.findById(receiptId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Receipt not found: " + receiptId));
@@ -114,7 +171,7 @@ public class ReceiptServiceImpl implements ReceiptService {
             }
         }
 
-        return receipt.getPdfUrl();
+        return receipt;
     }
 
     // ─── Receipt number ───────────────────────────────────────────────────────
@@ -266,24 +323,37 @@ public class ReceiptServiceImpl implements ReceiptService {
     // ─── Cloudinary upload ────────────────────────────────────────────────────
 
     @SuppressWarnings("unchecked")
-    private String uploadToCloudinary(byte[] pdfBytes,
-                                      String receiptNumber) throws Exception {
+    private Map<String, Object> uploadToCloudinary(byte[] pdfBytes,
+                                                   String storageKey) throws Exception {
         // "format", "pdf" is what makes the resulting secure_url end in
-        // .pdf (e.g. .../receipts/RCP-2026-00001.pdf) instead of a bare
+        // .pdf (e.g. .../receipts/<storageKey>.pdf) instead of a bare
         // extensionless public_id. Without it, browsers have no way to
         // recognize the file as a PDF and just force a generic download
         // dialog with no extension -- confirmed by pasting the raw URL
         // directly in a browser tab.
-        Map<String, Object> uploadResult = cloudinary.uploader().upload(
+        //
+        // public_id is now a random storageKey rather than the sequential
+        // receiptNumber -- keeps the Cloudinary path unguessable even
+        // though receiptNumber (e.g. RCP-2026-00002) is shown to the
+        // customer and increments predictably.
+        //
+        // type "authenticated" makes this a genuinely access-controlled
+        // resource -- unlike "upload" type, where Cloudinary's account-level
+        // "no unauthenticated PDF/ZIP delivery" restriction blocks ALL
+        // delivery regardless of signing. Return the full upload result
+        // (not just secure_url) so the caller can also capture "version"
+        // (kept on the Receipt row for reference, though privateDownloadUrl
+        // no longer needs it directly).
+        return cloudinary.uploader().upload(
                 pdfBytes,
                 ObjectUtils.asMap(
                         "resource_type", "raw",
+                        "type",          "authenticated",
                         "folder",        "receipts",
-                        "public_id",     receiptNumber,
+                        "public_id",     storageKey,
                         "format",        "pdf",
                         "overwrite",     true
                 ));
-        return (String) uploadResult.get("secure_url");
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

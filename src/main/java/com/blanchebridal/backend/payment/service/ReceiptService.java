@@ -7,6 +7,7 @@ import com.blanchebridal.backend.payment.entity.Receipt;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.UUID;
 
@@ -15,4 +16,6 @@ public interface ReceiptService {
     List<ReceiptResponse> getMyReceipts(UUID userId);
     Page<ReceiptResponse> getAllReceipts(Pageable pageable);
     String getReceiptPdfUrl(UUID receiptId, UUID requestingUserId, String role);
+    byte[] downloadReceiptPdf(UUID receiptId, UUID requestingUserId, String role) throws IOException, InterruptedException;
+    String getReceiptFilename(UUID receiptId, UUID requestingUserId, String role);
 }
