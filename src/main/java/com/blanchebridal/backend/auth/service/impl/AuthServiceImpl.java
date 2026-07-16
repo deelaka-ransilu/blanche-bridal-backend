@@ -225,6 +225,14 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public void forgotPassword(String email) {
         userRepository.findByEmail(email).ifPresent(user -> {
+            tokenRepository.findTopByUserAndTypeOrderByCreatedAtDesc(user, VerificationTokenType.PASSWORD_RESET)
+                    .ifPresent(existing -> {
+                        if (existing.getCreatedAt().isAfter(LocalDateTime.now().minusSeconds(60))) {
+                            throw new ConflictException(
+                                    "Please wait a minute before requesting another reset link.");
+                        }
+                    });
+
             tokenRepository.deleteAllByUserAndType(user, VerificationTokenType.PASSWORD_RESET);
             String tokenString = generateSecureToken();
 

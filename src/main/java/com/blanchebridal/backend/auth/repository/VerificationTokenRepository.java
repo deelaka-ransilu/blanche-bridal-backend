@@ -15,4 +15,6 @@ public interface VerificationTokenRepository extends JpaRepository<VerificationT
     Optional<VerificationToken> findByTokenAndType(String token, VerificationTokenType type);
 
     void deleteAllByUserAndType(User user, VerificationTokenType type);
+
+    Optional<VerificationToken> findTopByUserAndTypeOrderByCreatedAtDesc(User user, VerificationTokenType type);
 }
