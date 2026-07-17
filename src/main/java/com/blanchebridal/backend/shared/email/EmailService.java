@@ -77,4 +77,10 @@ public interface EmailService {
                                String customerName,
                                String originalMessage,
                                String replyMessage);
+
+    void sendAppointmentCancelledEmail(String toEmail,
+                                       String customerName,
+                                       LocalDate appointmentDate,
+                                       String timeSlot,
+                                       String appointmentType);
 }

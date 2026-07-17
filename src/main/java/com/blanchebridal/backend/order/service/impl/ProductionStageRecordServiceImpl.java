@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -132,6 +133,7 @@ public class ProductionStageRecordServiceImpl implements ProductionStageRecordSe
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Optional<ProductionStageRecordResponse> getForCustomer(UUID orderId, User requester) {
         return recordRepository.findByOrderId(orderId)
                 .filter(record ->
@@ -140,6 +142,15 @@ public class ProductionStageRecordServiceImpl implements ProductionStageRecordSe
                                 || record.getOrder().getUser().getId().equals(requester.getId())
                 )
                 .map(this::toResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductionStageRecordResponse> getPendingApprovals() {
+        return recordRepository.findByStatus(ProductionStatus.PENDING_APPROVAL)
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     // --- helpers ---

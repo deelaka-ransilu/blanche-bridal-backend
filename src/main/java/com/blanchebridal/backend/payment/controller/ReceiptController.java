@@ -55,7 +55,9 @@ public class ReceiptController {
                 )));
     }
 
-    // GET /api/receipts/{id}/pdf — returns Cloudinary URL
+    // GET /api/receipts/{id}/pdf — legacy: returns Cloudinary URL for
+    // receipts generated before the DB-storage switch. Will return null
+    // pdfUrl for anything generated after; prefer /download going forward.
     @GetMapping("/{id}/pdf")
     @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> getReceiptPdfUrl(
@@ -75,7 +77,7 @@ public class ReceiptController {
     @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<byte[]> downloadReceiptPdf(
             @PathVariable UUID id,
-            @AuthenticationPrincipal User user) throws Exception {
+            @AuthenticationPrincipal User user) {
 
         UUID requestingUserId = user.getId();
         String role = user.getRole().name();
@@ -89,5 +91,17 @@ public class ReceiptController {
                 .header("Content-Type", "application/pdf")
                 .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
                 .body(pdfBytes);
+    }
+
+    @GetMapping("/by-order/{orderId}")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE')")
+    public ResponseEntity<Map<String, Object>> getReceiptByOrderId(
+            @PathVariable UUID orderId,
+            @AuthenticationPrincipal User user) {
+
+        UUID requestingUserId = user.getId();
+        String role = user.getRole().name();
+        ReceiptResponse receipt = receiptService.getReceiptByOrderId(orderId, requestingUserId, role);
+        return ResponseEntity.ok(Map.of("success", true, "data", receipt));
     }
 }

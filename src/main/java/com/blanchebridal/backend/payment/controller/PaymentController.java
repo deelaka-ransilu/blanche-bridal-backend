@@ -9,6 +9,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -61,16 +64,18 @@ public class PaymentController {
     }
 
     // CUSTOMER — poll payment status from /checkout/success page
+    // ADMIN/EMPLOYEE — diagnostic view on the order detail page
     @GetMapping("/status/{orderId}")
-    @PreAuthorize("hasRole('CUSTOMER')")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> getPaymentStatus(
             @PathVariable UUID orderId,
             @RequestHeader("Authorization") String authHeader) {
 
         UUID userId = extractUserId(authHeader);
+        String role = extractRole();
         return ResponseEntity.ok(Map.of(
                 "success", true,
-                "data", paymentService.getPaymentStatus(orderId, userId)
+                "data", paymentService.getPaymentStatus(orderId, userId, role)
         ));
     }
 
@@ -86,5 +91,13 @@ public class PaymentController {
             throw new UnauthorizedException("Missing or invalid Authorization header");
         }
         return UUID.fromString(jwtUtil.extractUserId(authHeader.substring(7)));
+    }
+
+    private String extractRole() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth.getAuthorities().stream()
+                .findFirst()
+                .map(GrantedAuthority::getAuthority)
+                .orElse("");
     }
 }

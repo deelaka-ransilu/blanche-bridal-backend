@@ -9,10 +9,9 @@ import com.blanchebridal.backend.payment.entity.Payment;
 import com.blanchebridal.backend.payment.entity.Receipt;
 import com.blanchebridal.backend.payment.repository.ReceiptRepository;
 import com.blanchebridal.backend.payment.service.ReceiptService;
-import com.cloudinary.Cloudinary;
-import com.cloudinary.utils.ObjectUtils;
 import com.itextpdf.io.font.constants.StandardFonts;
 import com.itextpdf.kernel.colors.ColorConstants;
+import com.itextpdf.kernel.colors.DeviceRgb;
 import com.itextpdf.kernel.font.PdfFont;
 import com.itextpdf.kernel.font.PdfFontFactory;
 import com.itextpdf.kernel.pdf.PdfDocument;
@@ -34,14 +33,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -50,10 +44,20 @@ import java.util.UUID;
 public class ReceiptServiceImpl implements ReceiptService {
 
     private final ReceiptRepository receiptRepository;
-    private final Cloudinary cloudinary;
 
     private static final DateTimeFormatter DATE_FMT =
             DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm");
+
+    // ─── Brand colors ────────────────────────────────────────────────────────
+    // Mirrors the light-theme palette in globals.css so the PDF feels
+    // consistent with the rest of the site rather than using arbitrary colors.
+    private static final DeviceRgb PRIMARY          = new DeviceRgb(0xD2, 0x33, 0x5E); // --primary
+    private static final DeviceRgb PRIMARY_LIGHT     = new DeviceRgb(0xFB, 0xEC, 0xF1); // tint of --primary for backgrounds
+    private static final DeviceRgb MUTED_FOREGROUND  = new DeviceRgb(0x6B, 0x6B, 0x6B); // --muted-foreground
+    private static final DeviceRgb BORDER            = new DeviceRgb(0xE8, 0xE5, 0xE0); // --border
+    private static final DeviceRgb STATUS_COMPLETED  = new DeviceRgb(0x4C, 0x8B, 0x63); // --status-completed
+    private static final DeviceRgb STATUS_PENDING    = new DeviceRgb(0xC9, 0x96, 0x2C); // --status-pending
+    private static final DeviceRgb STATUS_CANCELLED  = new DeviceRgb(0xA3, 0x48, 0x48); // --status-cancelled
 
     // ─── Public API ──────────────────────────────────────────────────────────
 
@@ -65,20 +69,13 @@ public class ReceiptServiceImpl implements ReceiptService {
                 .orElseGet(() -> {
                     try {
                         String receiptNumber = buildNextReceiptNumber();
-                        String storageKey    = UUID.randomUUID().toString();
                         byte[] pdfBytes      = buildPdf(order, payment, receiptNumber);
-
-                        Map<String, Object> uploadResult = uploadToCloudinary(pdfBytes, storageKey);
-                        String pdfUrl   = (String) uploadResult.get("secure_url");
-                        Integer version = (Integer) uploadResult.get("version");
 
                         Receipt receipt = Receipt.builder()
                                 .order(order)
                                 .payment(payment)
                                 .receiptNumber(receiptNumber)
-                                .storageKey(storageKey)
-                                .storageVersion(version)
-                                .pdfUrl(pdfUrl)
+                                .pdfData(pdfBytes)
                                 .build();
 
                         return receiptRepository.save(receipt);
@@ -110,41 +107,29 @@ public class ReceiptServiceImpl implements ReceiptService {
     @Override
     @Transactional(readOnly = true)
     public String getReceiptPdfUrl(UUID receiptId, UUID requestingUserId, String role) {
+        // Legacy field — only populated on receipts generated before the
+        // switch to DB storage. Will be null for anything generated after.
         return getAuthorizedReceipt(receiptId, requestingUserId, role).getPdfUrl();
     }
 
     @Override
     @Transactional(readOnly = true)
-    public byte[] downloadReceiptPdf(UUID receiptId, UUID requestingUserId, String role)
-            throws IOException, InterruptedException {
-
+    public byte[] downloadReceiptPdf(UUID receiptId, UUID requestingUserId, String role) {
         Receipt receipt = getAuthorizedReceipt(receiptId, requestingUserId, role);
 
-        // Signed URL for an authenticated-type resource. Cloudinary's signature
-        // for authenticated raw resources is computed including the resource's
-        // version, so it must be included here or the signature is invalid and
-        // Cloudinary returns 401 at fetch time -- captured once at upload time
-        // and stored as receipt.storageVersion.
-        String signedUrl = cloudinary.url()
-                .resourceType("raw")
-                .type("authenticated")
-                .signed(true)
-                .version(receipt.getStorageVersion())
-                .format("pdf")
-                .generate("receipts/" + receipt.getStorageKey());
-
-        HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder(URI.create(signedUrl)).GET().build();
-        HttpResponse<byte[]> response =
-                client.send(request, HttpResponse.BodyHandlers.ofByteArray());
-
-        if (response.statusCode() != 200) {
-            log.error("Cloudinary signed fetch failed for receipt {}: HTTP {}",
-                    receiptId, response.statusCode());
-            throw new RuntimeException("Failed to retrieve receipt PDF from storage");
+        byte[] pdfData = receipt.getPdfData();
+        if (pdfData == null || pdfData.length == 0) {
+            // Covers receipts created before the DB-storage migration whose
+            // only copy lives in Cloudinary — that delivery path is
+            // currently blocked (untrusted free-tier account), so there's
+            // nothing we can serve for these until they're backfilled.
+            log.error("No pdf_data stored for receipt {} — likely a pre-migration " +
+                    "Cloudinary-only receipt with no local backfill.", receiptId);
+            throw new ResourceNotFoundException(
+                    "Receipt PDF is not available for download: " + receiptId);
         }
 
-        return response.body();
+        return pdfData;
     }
 
     @Override
@@ -152,6 +137,24 @@ public class ReceiptServiceImpl implements ReceiptService {
     public String getReceiptFilename(UUID receiptId, UUID requestingUserId, String role) {
         Receipt receipt = getAuthorizedReceipt(receiptId, requestingUserId, role);
         return receipt.getReceiptNumber() + ".pdf";
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ReceiptResponse getReceiptByOrderId(UUID orderId, UUID requestingUserId, String role) {
+        Receipt receipt = receiptRepository.findByOrder_Id(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "No receipt found for order: " + orderId));
+
+        boolean isAdminOrEmployee = "ADMIN".equals(role) || "EMPLOYEE".equals(role);
+        if (!isAdminOrEmployee) {
+            UUID ownerUserId = receipt.getOrder().getUser().getId();
+            if (!ownerUserId.equals(requestingUserId)) {
+                throw new UnauthorizedException("Access denied to this receipt");
+            }
+        }
+
+        return toResponse(receipt);
     }
 
     // ─── Shared ownership check ─────────────────────────────────────────────
@@ -212,7 +215,8 @@ public class ReceiptServiceImpl implements ReceiptService {
         // ── Header ──────────────────────────────────────────────────────────
         document.add(new Paragraph("Blanche Bridal")
                 .setFont(bold)
-                .setFontSize(22)
+                .setFontSize(24)
+                .setFontColor(PRIMARY)
                 .setTextAlignment(TextAlignment.CENTER)
                 .setMarginBottom(4));
 
@@ -220,8 +224,16 @@ public class ReceiptServiceImpl implements ReceiptService {
                 .setFont(regular)
                 .setFontSize(12)
                 .setTextAlignment(TextAlignment.CENTER)
-                .setFontColor(ColorConstants.GRAY)
-                .setMarginBottom(20));
+                .setFontColor(MUTED_FOREGROUND)
+                .setMarginBottom(12));
+
+        // Thin brand-colored rule under the header, echoing the site's
+        // primary accent rather than a plain gray divider.
+        document.add(new com.itextpdf.layout.element.Div()
+                .setHeight(2)
+                .setWidth(UnitValue.createPercentValue(100))
+                .setBackgroundColor(PRIMARY)
+                .setMarginBottom(18));
 
         // ── Receipt meta ─────────────────────────────────────────────────────
         document.add(metaLine("Receipt No:", receiptNumber, bold, regular));
@@ -257,8 +269,8 @@ public class ReceiptServiceImpl implements ReceiptService {
         for (String col : new String[]{"Product", "Size", "Qty",
                 "Unit Price (LKR)", "Subtotal (LKR)"}) {
             table.addHeaderCell(new Cell()
-                    .add(new Paragraph(col).setFont(bold).setFontSize(10))
-                    .setBackgroundColor(ColorConstants.LIGHT_GRAY)
+                    .add(new Paragraph(col).setFont(bold).setFontSize(10).setFontColor(PRIMARY))
+                    .setBackgroundColor(PRIMARY_LIGHT)
                     .setPadding(6));
         }
 
@@ -276,14 +288,16 @@ public class ReceiptServiceImpl implements ReceiptService {
             table.addCell(cell(formatAmount(subtotal), regular));
         }
 
-        // Total row
+        // Total row — tinted to draw the eye, matching the table header
         table.addCell(new Cell(1, 4)
                 .add(new Paragraph("TOTAL").setFont(bold).setFontSize(10))
+                .setBackgroundColor(PRIMARY_LIGHT)
                 .setBorderTop(null)
                 .setPadding(6));
         table.addCell(new Cell()
                 .add(new Paragraph(formatAmount(order.getTotalAmount()))
-                        .setFont(bold).setFontSize(10))
+                        .setFont(bold).setFontSize(10).setFontColor(PRIMARY))
+                .setBackgroundColor(PRIMARY_LIGHT)
                 .setPadding(6));
 
         document.add(table);
@@ -294,8 +308,17 @@ public class ReceiptServiceImpl implements ReceiptService {
 
         document.add(metaLine("Method:",
                 payment.getMethod().name(), bold, regular));
-        document.add(metaLine("Status:",
-                payment.getStatus().name(), bold, regular));
+
+        DeviceRgb statusColor = switch (payment.getStatus().name()) {
+            case "COMPLETED" -> STATUS_COMPLETED;
+            case "FAILED", "CANCELLED" -> STATUS_CANCELLED;
+            default -> STATUS_PENDING; // PENDING and any other in-progress state
+        };
+        document.add(new Paragraph()
+                .add(new Text("Status:  ").setFont(bold).setFontSize(10))
+                .add(new Text(payment.getStatus().name())
+                        .setFont(bold).setFontSize(10).setFontColor(statusColor))
+                .setMarginBottom(2));
 
         if (payment.getPaidAt() != null) {
             document.add(metaLine("Paid At:",
@@ -307,53 +330,23 @@ public class ReceiptServiceImpl implements ReceiptService {
         }
 
         // ── Footer ───────────────────────────────────────────────────────────
+        document.add(new com.itextpdf.layout.element.Div()
+                .setHeight(1)
+                .setWidth(UnitValue.createPercentValue(100))
+                .setBackgroundColor(BORDER)
+                .setMarginTop(28)
+                .setMarginBottom(14));
+
         document.add(new Paragraph(
-                "\nThank you for choosing Blanche Bridal. "
+                "Thank you for choosing Blanche Bridal. "
                         + "We look forward to being part of your special day.")
                 .setFont(regular)
                 .setFontSize(10)
                 .setTextAlignment(TextAlignment.CENTER)
-                .setFontColor(ColorConstants.GRAY)
-                .setMarginTop(24));
+                .setFontColor(MUTED_FOREGROUND));
 
         document.close();
         return baos.toByteArray();
-    }
-
-    // ─── Cloudinary upload ────────────────────────────────────────────────────
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> uploadToCloudinary(byte[] pdfBytes,
-                                                   String storageKey) throws Exception {
-        // "format", "pdf" is what makes the resulting secure_url end in
-        // .pdf (e.g. .../receipts/<storageKey>.pdf) instead of a bare
-        // extensionless public_id. Without it, browsers have no way to
-        // recognize the file as a PDF and just force a generic download
-        // dialog with no extension -- confirmed by pasting the raw URL
-        // directly in a browser tab.
-        //
-        // public_id is now a random storageKey rather than the sequential
-        // receiptNumber -- keeps the Cloudinary path unguessable even
-        // though receiptNumber (e.g. RCP-2026-00002) is shown to the
-        // customer and increments predictably.
-        //
-        // type "authenticated" makes this a genuinely access-controlled
-        // resource -- unlike "upload" type, where Cloudinary's account-level
-        // "no unauthenticated PDF/ZIP delivery" restriction blocks ALL
-        // delivery regardless of signing. Return the full upload result
-        // (not just secure_url) so the caller can also capture "version"
-        // (kept on the Receipt row for reference, though privateDownloadUrl
-        // no longer needs it directly).
-        return cloudinary.uploader().upload(
-                pdfBytes,
-                ObjectUtils.asMap(
-                        "resource_type", "raw",
-                        "type",          "authenticated",
-                        "folder",        "receipts",
-                        "public_id",     storageKey,
-                        "format",        "pdf",
-                        "overwrite",     true
-                ));
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────

@@ -36,6 +36,7 @@ public class EmailServiceImpl implements EmailService {
     private static final DateTimeFormatter DATE_FORMAT =
             DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy");
 
+    @Async
     @Override
     public void sendVerificationEmail(String toEmail, String token) {
         String encodedToken = URLEncoder.encode(token, StandardCharsets.UTF_8);
@@ -117,6 +118,7 @@ public class EmailServiceImpl implements EmailService {
         sendHtmlEmail(toEmail, "Reset your Blanche Bridal password", html);
     }
 
+    @Async
     @Override
     public void sendOrderConfirmationEmail(String toEmail,
                                            String customerName,
@@ -193,6 +195,7 @@ public class EmailServiceImpl implements EmailService {
         sendHtmlEmail(toEmail, "Your Blanche Bridal order is confirmed - #" + orderId, html);
     }
 
+    @Async
     @Override
     public void sendAppointmentConfirmationEmail(String toEmail,
                                                  String customerName,
@@ -269,6 +272,7 @@ public class EmailServiceImpl implements EmailService {
         );
     }
 
+    @Async
     @Override
     public void sendAppointmentBookingReceivedEmail(String toEmail,
                                                     String customerName,
@@ -346,6 +350,7 @@ public class EmailServiceImpl implements EmailService {
         );
     }
 
+    @Async
     @Override
     public void sendAppointmentReminderEmail(String toEmail,
                                              String customerName,
@@ -400,6 +405,7 @@ public class EmailServiceImpl implements EmailService {
         sendHtmlEmail(toEmail, "Reminder: Your appointment tomorrow at " + timeSlot, html);
     }
 
+    @Async
     @Override
     public void sendRentalOverdueEmail(String toEmail,
                                        String customerName,
@@ -455,6 +461,7 @@ public class EmailServiceImpl implements EmailService {
         sendHtmlEmail(toEmail, "Action required: Rental return overdue", html);
     }
 
+    @Async
     @Override
     public void sendAdminWelcomeEmail(String toEmail,
                                       String firstName,
@@ -529,6 +536,7 @@ public class EmailServiceImpl implements EmailService {
         sendHtmlEmail(toEmail, "Your Blanche Bridal admin account is ready", html);
     }
 
+    @Async
     @Override
     public void sendAppointmentRescheduledEmail(String toEmail,
                                                 String customerName,
@@ -581,6 +589,7 @@ public class EmailServiceImpl implements EmailService {
         sendHtmlEmail(toEmail, "Your appointment has been rescheduled — " + dateStr + " at " + newTimeSlot, html);
     }
 
+    @Async
     @Override
     public void sendInquiryReplyEmail(String toEmail, String customerName,
                                       String originalMessage, String replyMessage) {
@@ -621,6 +630,59 @@ public class EmailServiceImpl implements EmailService {
         );
 
         sendHtmlEmail(toEmail, "Re: Your Blanche Bridal Enquiry", html);
+    }
+
+    @Async
+    @Override
+    public void sendAppointmentCancelledEmail(String toEmail,
+                                              String customerName,
+                                              LocalDate appointmentDate,
+                                              String timeSlot,
+                                              String appointmentType) {
+        String formattedType = formatType(appointmentType);
+        String dateStr = appointmentDate.format(DATE_FORMAT);
+
+        String html = """
+    <!DOCTYPE html>
+    <html>
+    <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
+        <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
+            <h1 style="color:#b00020; text-align:center;">Appointment Cancelled</h1>
+
+            <p style="color:#444444; font-size:16px; line-height:1.6;">Dear %s,</p>
+
+            <p style="color:#444444; font-size:16px; line-height:1.6;">
+                Your <strong>%s</strong> appointment scheduled for the details below has been cancelled.
+            </p>
+
+            <div style="background-color:#f8f3f0; padding:18px; border-radius:10px; margin:20px 0;">
+                <p style="color:#444444; font-size:16px; margin:0 0 8px 0;">
+                    <strong>Date:</strong> %s
+                </p>
+                <p style="color:#444444; font-size:16px; margin:0;">
+                    <strong>Time:</strong> %s
+                </p>
+            </div>
+
+            <p style="color:#444444; font-size:15px; line-height:1.6;">
+                If this wasn't expected, or you'd like to book a new time, please contact us or
+                book again from your account.
+            </p>
+
+            <p style="font-size:14px; color:#8b5e57; text-align:center; margin-top:28px;">
+                Blanche Bridal Couture
+            </p>
+        </div>
+    </body>
+    </html>
+    """.formatted(
+                escapeHtml(customerName),
+                escapeHtml(formattedType),
+                escapeHtml(dateStr),
+                escapeHtml(timeSlot)
+        );
+
+        sendHtmlEmail(toEmail, "Your appointment on " + dateStr + " has been cancelled", html);
     }
 
     private void sendHtmlEmail(String toEmail, String subject, String html) {

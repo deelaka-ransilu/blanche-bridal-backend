@@ -169,22 +169,6 @@ public class AppointmentServiceImpl implements AppointmentService {
                     .build();
             customDesignRequestRepository.save(customDesignRequest);
         }
-
-        try {
-            emailService.sendAppointmentBookingReceivedEmail(
-                    user.getEmail(),
-                    user.getFirstName() + " " + user.getLastName(),
-                    saved.getId(),
-                    saved.getAppointmentDate(),
-                    saved.getTimeSlot(),
-                    saved.getType().name(),
-                    saved.getProduct() != null ? saved.getProduct().getName() : null
-            );
-        } catch (Exception e) {
-            log.warn("[Appointment] Failed to send booking received email for {}: {}",
-                    saved.getId(), e.getMessage());
-        }
-
         return toResponse(saved);
     }
 
@@ -238,7 +222,25 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
 
         appointment.setStatus(AppointmentStatus.CANCELLED);
-        return toResponse(appointmentRepository.save(appointment));
+        Appointment saved = appointmentRepository.save(appointment);
+
+        try {
+            User customer = saved.getUser();
+            if (customer != null) {
+                emailService.sendAppointmentCancelledEmail(
+                        customer.getEmail(),
+                        customer.getFirstName() + " " + customer.getLastName(),
+                        saved.getAppointmentDate(),
+                        saved.getTimeSlot(),
+                        saved.getType().name()
+                );
+            }
+        } catch (Exception e) {
+            log.warn("[Appointment] Failed to send cancellation email for {}: {}",
+                    saved.getId(), e.getMessage());
+        }
+
+        return toResponse(saved);
     }
 
     @Override

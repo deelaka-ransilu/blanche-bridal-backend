@@ -12,6 +12,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -81,5 +82,13 @@ public class ProductionStageRecordController {
         return productionService.getForCustomer(orderId, customer)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    // Admin dashboard — list of production records currently awaiting
+    // admin approval, across all orders.
+    @GetMapping("/api/admin/production/pending-approvals")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<List<ProductionStageRecordResponse>> getPendingApprovals() {
+        return ResponseEntity.ok(productionService.getPendingApprovals());
     }
 }

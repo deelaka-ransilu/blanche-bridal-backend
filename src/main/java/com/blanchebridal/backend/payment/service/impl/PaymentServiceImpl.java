@@ -225,13 +225,17 @@ public class PaymentServiceImpl implements PaymentService {
         return PaymentStatusResponse.builder().status(PaymentStatus.COMPLETED.name()).build();
     }
 
+    // PaymentServiceImpl.java / PaymentService.java
     @Override
     @Transactional(readOnly = true)
-    public PaymentStatusResponse getPaymentStatus(UUID orderId, UUID userId) {
+    public PaymentStatusResponse getPaymentStatus(UUID orderId, UUID userId, String role) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
 
-        if (order.getUser() == null || !order.getUser().getId().equals(userId)) {
+        boolean isCustomer = role != null &&
+                (role.equals("ROLE_CUSTOMER") || role.equals("CUSTOMER"));
+
+        if (isCustomer && (order.getUser() == null || !order.getUser().getId().equals(userId))) {
             throw new UnauthorizedException("Access denied to this order");
         }
 

@@ -9,6 +9,6 @@ import java.util.UUID;
 public interface PaymentService {
     PaymentInitiateResponse initiatePayment(UUID orderId, UUID userId);
     void handleWebhook(Map<String, String> params);
-    PaymentStatusResponse getPaymentStatus(UUID orderId, UUID userId);
+    PaymentStatusResponse getPaymentStatus(UUID orderId, UUID userId, String role);
     PaymentStatusResponse confirmCashPayment(UUID orderId);
 }
