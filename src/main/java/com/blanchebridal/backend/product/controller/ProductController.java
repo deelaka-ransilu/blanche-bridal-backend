@@ -191,6 +191,10 @@ public class ProductController {
                 requireAdmin();
                 yield "blanche-bridal/products";
             }
+            case "gallery" -> {
+                requireAdmin();
+                yield "blanche-bridal/gallery";
+            }
             case "custom-design" -> "blanche-bridal/custom-design-references";
             default -> throw new IllegalArgumentException("Unknown upload context: " + context);
         };
