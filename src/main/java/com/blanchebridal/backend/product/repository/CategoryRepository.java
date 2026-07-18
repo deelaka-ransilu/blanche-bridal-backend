@@ -1,6 +1,7 @@
 package com.blanchebridal.backend.product.repository;
 
 import com.blanchebridal.backend.product.entity.Category;
+import com.blanchebridal.backend.product.entity.CategoryType;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -15,4 +16,8 @@ public interface CategoryRepository extends JpaRepository<Category, UUID> {
     List<Category> findAllByIsActiveTrue();
     List<Category> findByIsActiveFalse();
     Optional<Category> findByIdAndIsActiveFalse(UUID id);
+
+    // Used to power Catalog (ACCESSORY) vs Rentals (DRESS) category
+    // dropdowns/lists on the frontend.
+    List<Category> findByTypeAndIsActiveTrue(CategoryType type);
 }

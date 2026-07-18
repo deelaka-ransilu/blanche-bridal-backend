@@ -11,8 +11,10 @@ import com.blanchebridal.backend.product.dto.req.UpdateProductRequest;
 import com.blanchebridal.backend.product.dto.res.ProductDetailResponse;
 import com.blanchebridal.backend.product.dto.res.ProductSummaryResponse;
 import com.blanchebridal.backend.product.entity.Category;
+import com.blanchebridal.backend.product.entity.CategoryType;
 import com.blanchebridal.backend.product.entity.Product;
 import com.blanchebridal.backend.product.entity.ProductImage;
+import com.blanchebridal.backend.product.entity.ProductType;
 import com.blanchebridal.backend.product.repository.CategoryRepository;
 import com.blanchebridal.backend.product.repository.ProductRepository;
 import com.blanchebridal.backend.product.service.ProductService;
@@ -28,6 +30,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -75,20 +78,23 @@ public class ProductServiceImpl implements ProductService {
             throw new ConflictException("A product with this name already exists");
         }
 
-        Category category = null;
-        if (request.categoryId() != null) {
-            category = categoryRepository.findByIdAndIsActiveTrue(request.categoryId())
-                    .orElseThrow(() -> new ResourceNotFoundException(
-                            "Category not found: " + request.categoryId()));
-        }
+        // categoryId is required — category is what determines whether this
+        // product is sellable (ACCESSORY) or rentable (DRESS).
+        Category category = categoryRepository.findByIdAndIsActiveTrue(request.categoryId())
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Category not found: " + request.categoryId()));
+
+        validateCategoryProductTypeMatch(
+                category, request.purchasePrice(), request.rentalPrice(), request.rentalPricePerDay());
 
         Product product = Product.builder()
                 .name(request.name())
                 .slug(slugify(request.name()))
                 .description(request.description())
-                .type(request.type())
+                .type(deriveProductType(category)) // derived from category, never from the request
                 .category(category)
                 .rentalPrice(request.rentalPrice())
+                .rentalPricePerDay(request.rentalPricePerDay())
                 .purchasePrice(request.purchasePrice())
                 .stock(request.stock())
                 .sizes(toJson(request.sizes()))
@@ -111,19 +117,40 @@ public class ProductServiceImpl implements ProductService {
             product.setSlug(slugify(request.name()));
         }
         if (request.description()  != null) product.setDescription(request.description());
-        if (request.type()         != null) product.setType(request.type());
-        if (request.rentalPrice()  != null) product.setRentalPrice(request.rentalPrice());
-        if (request.purchasePrice() != null) product.setPurchasePrice(request.purchasePrice());
         if (request.stock()        != null) product.setStock(request.stock());
         if (request.isAvailable()  != null) product.setIsAvailable(request.isAvailable());
         if (request.sizes()        != null) product.setSizes(toJson(request.sizes()));
 
+        // Resolve the category that will be in effect after this update —
+        // either newly requested, or whatever the product already has.
+        Category category = product.getCategory();
         if (request.categoryId() != null) {
-            Category category = categoryRepository.findByIdAndIsActiveTrue(request.categoryId())
+            category = categoryRepository.findByIdAndIsActiveTrue(request.categoryId())
                     .orElseThrow(() -> new ResourceNotFoundException(
                             "Category not found: " + request.categoryId()));
-            product.setCategory(category);
         }
+        if (category == null) {
+            throw new ConflictException("Product must belong to a category");
+        }
+
+        // Resolve the price fields that will be in effect after this update.
+        // Same "null means unchanged" convention as every other field above —
+        // to clear a price when switching category type, the caller must
+        // explicitly send the correct fields for the new type.
+        BigDecimal purchasePrice = request.purchasePrice() != null
+                ? request.purchasePrice() : product.getPurchasePrice();
+        BigDecimal rentalPrice = request.rentalPrice() != null
+                ? request.rentalPrice() : product.getRentalPrice();
+        BigDecimal rentalPricePerDay = request.rentalPricePerDay() != null
+                ? request.rentalPricePerDay() : product.getRentalPricePerDay();
+
+        validateCategoryProductTypeMatch(category, purchasePrice, rentalPrice, rentalPricePerDay);
+
+        product.setCategory(category);
+        product.setType(deriveProductType(category));
+        product.setPurchasePrice(purchasePrice);
+        product.setRentalPrice(rentalPrice);
+        product.setRentalPricePerDay(rentalPricePerDay);
 
         if (request.images() != null) {
             // Clean up old images from Cloudinary before replacing
@@ -195,6 +222,44 @@ public class ProductServiceImpl implements ProductService {
     private Product findActiveById(UUID id) {
         return productRepository.findByIdAndIsActiveTrue(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + id));
+    }
+
+    // A category's type fully determines whether a product is sellable
+    // (ACCESSORY) or rentable (DRESS) — Product.type is never trusted from
+    // the client, only ever derived here.
+    private ProductType deriveProductType(Category category) {
+        return category.getType() == CategoryType.DRESS ? ProductType.DRESS : ProductType.ACCESSORY;
+    }
+
+    // ACCESSORY categories: purchase-only, no rental pricing allowed.
+    // DRESS categories: rental-only (flat and/or per-day), no purchase price.
+    // "Rentable" counts as either rentalPrice or rentalPricePerDay being set,
+    // since RentalServiceImpl treats rentalPricePerDay as valid rentable
+    // state on its own (used instead of the flat rentalPrice when present).
+    private void validateCategoryProductTypeMatch(
+            Category category,
+            BigDecimal purchasePrice,
+            BigDecimal rentalPrice,
+            BigDecimal rentalPricePerDay
+    ) {
+        boolean hasPurchase = purchasePrice != null;
+        boolean hasRental = rentalPrice != null || rentalPricePerDay != null;
+
+        if (category.getType() == CategoryType.ACCESSORY) {
+            if (!hasPurchase) {
+                throw new ConflictException("Accessory products require a purchase price");
+            }
+            if (hasRental) {
+                throw new ConflictException("Accessory products cannot have rental pricing");
+            }
+        } else { // DRESS
+            if (!hasRental) {
+                throw new ConflictException("Dress products require a rental price or per-day rate");
+            }
+            if (hasPurchase) {
+                throw new ConflictException("Dress products cannot have a purchase price");
+            }
+        }
     }
 
     private void attachImages(Product product, List<ProductImageInput> images) {

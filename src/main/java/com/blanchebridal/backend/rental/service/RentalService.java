@@ -1,8 +1,11 @@
 package com.blanchebridal.backend.rental.service;
 
+import com.blanchebridal.backend.order.dto.res.OrderResponse;
+import com.blanchebridal.backend.rental.dto.req.CreateRentalBookingRequest;
 import com.blanchebridal.backend.rental.dto.req.CreateRentalRequest;
 import com.blanchebridal.backend.rental.dto.req.RentalBookingRequest;
 import com.blanchebridal.backend.rental.dto.req.UpdateBalanceRequest;
+import com.blanchebridal.backend.rental.dto.res.RentableProductResponse;
 import com.blanchebridal.backend.rental.dto.res.RentalResponse;
 import com.blanchebridal.backend.rental.entity.RentalStatus;
 import org.springframework.data.domain.Page;
@@ -37,4 +40,8 @@ public interface RentalService {
     // New: cancels PENDING_PAYMENT rentals (and their synthetic order) once
     // 48h have passed since the requested pickup date with no cash paid.
     void expireStaleBookings();
+
+    List<RentableProductResponse> getRentableProducts();
+
+    OrderResponse createRentalBooking(CreateRentalBookingRequest req, UUID callerId, String role);
 }

@@ -3,6 +3,7 @@ package com.blanchebridal.backend.product.controller;
 import com.blanchebridal.backend.product.dto.req.CreateCategoryRequest;
 import com.blanchebridal.backend.product.dto.req.UpdateCategoryRequest;
 import com.blanchebridal.backend.product.dto.res.CategoryResponse;
+import com.blanchebridal.backend.product.entity.CategoryType;
 import com.blanchebridal.backend.product.service.CategoryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -23,10 +24,11 @@ public class CategoryController {
 
     private final CategoryService categoryService;
 
-    // Public
+    // Public. ?type=DRESS or ?type=ACCESSORY filters; omitted returns all.
     @GetMapping
-    public ResponseEntity<Map<String, Object>> getAll() {
-        List<CategoryResponse> categories = categoryService.getAllCategories();
+    public ResponseEntity<Map<String, Object>> getAll(
+            @RequestParam(required = false) CategoryType type) {
+        List<CategoryResponse> categories = categoryService.getAllCategories(type);
         return ResponseEntity.ok(Map.of("success", true, "data", categories));
     }
 
@@ -43,7 +45,7 @@ public class CategoryController {
     public ResponseEntity<Map<String, Object>> create(
             @Valid @RequestBody CreateCategoryRequest request) {
 
-        log.info("[Category] Create request — name: {}", request.name());
+        log.info("[Category] Create request — name: {}, type: {}", request.name(), request.type());
         return ResponseEntity.ok(Map.of("success", true,
                 "data", categoryService.createCategory(request)));
     }

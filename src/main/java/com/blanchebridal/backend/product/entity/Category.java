@@ -25,6 +25,13 @@ public class Category {
     @Column(unique = true, nullable = false, length = 100)
     private String slug;
 
+    // DRESS categories are rentable-only (feed the Rentals admin tab);
+    // ACCESSORY categories are sellable-only (feed the Catalog admin tab).
+    // A product's own type is derived from this — see ProductServiceImpl.
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private CategoryType type;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
     @ToString.Exclude

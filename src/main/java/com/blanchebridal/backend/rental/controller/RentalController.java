@@ -2,10 +2,7 @@ package com.blanchebridal.backend.rental.controller;
 
 import com.blanchebridal.backend.auth.security.JwtUtil;
 import com.blanchebridal.backend.exception.UnauthorizedException;
-import com.blanchebridal.backend.rental.dto.req.CreateRentalRequest;
-import com.blanchebridal.backend.rental.dto.req.MarkReturnedRequest;
-import com.blanchebridal.backend.rental.dto.req.RentalBookingRequest;
-import com.blanchebridal.backend.rental.dto.req.UpdateBalanceRequest;
+import com.blanchebridal.backend.rental.dto.req.*;
 import com.blanchebridal.backend.rental.entity.RentalStatus;
 import com.blanchebridal.backend.rental.service.RentalService;
 import jakarta.validation.Valid;
@@ -85,7 +82,10 @@ public class RentalController {
         ));
     }
 
-    // ADMIN + EMPLOYEE — create rental on behalf of customer
+    // ADMIN + EMPLOYEE — create rental on behalf of customer (manual
+    // data-entry style: sets status directly, no synthetic-order/payment
+    // integration). Kept as-is — distinct from the walk-in booking endpoint
+    // below, which is what WalkInSalePanel actually calls.
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> createRental(
@@ -164,6 +164,38 @@ public class RentalController {
                 "success", true,
                 "data", rentalService.updateBalance(id, request)
         ));
+    }
+
+    // ADMIN + EMPLOYEE — rentable dresses (type=DRESS, available, active,
+    // not currently booked) for WalkInSalePanel's select-gown step.
+    @GetMapping("/rentable-products")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    public ResponseEntity<Map<String, Object>> getRentableProducts() {
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "data", rentalService.getRentableProducts()
+        ));
+    }
+
+    // ADMIN + EMPLOYEE — walk-in rental booking (WalkInSalePanel). Separate
+    // path from the bare POST /api/rentals above: this one builds a real
+    // synthetic Order (isRentalDeposit=true, PENDING) that plugs into the
+    // existing cash/PayHere payment-confirmation flow — PaymentServiceImpl's
+    // handleRentalDepositConfirmed() flips this Rental PENDING_PAYMENT ->
+    // BOOKED once that order's payment completes. createRental() above does
+    // not do any of that — it's a separate, more direct admin tool.
+    @PostMapping("/walk-in")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    public ResponseEntity<Map<String, Object>> createRentalBooking(
+            @RequestHeader("Authorization") String authHeader,
+            @Valid @RequestBody CreateRentalBookingRequest request) {
+
+        UUID callerId = extractUserId(authHeader);
+        String role = extractRole();
+        log.info("[Rental] Walk-in booking request — caller: {}, role: {}, product: {}",
+                callerId, role, request.getProductId());
+        return ResponseEntity.ok(Map.of("success", true,
+                "data", rentalService.createRentalBooking(request, callerId, role)));
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────

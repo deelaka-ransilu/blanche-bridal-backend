@@ -6,6 +6,7 @@ import com.blanchebridal.backend.product.dto.res.CategoryResponse;
 import com.blanchebridal.backend.product.dto.req.UpdateCategoryRequest;
 import com.blanchebridal.backend.product.dto.req.CreateCategoryRequest;
 import com.blanchebridal.backend.product.entity.Category;
+import com.blanchebridal.backend.product.entity.CategoryType;
 import com.blanchebridal.backend.product.repository.CategoryRepository;
 import com.blanchebridal.backend.product.service.CategoryService;
 import lombok.RequiredArgsConstructor;
@@ -22,9 +23,12 @@ public class CategoryServiceImpl implements CategoryService {
     private final CategoryRepository categoryRepository;
 
     @Override
-    public List<CategoryResponse> getAllCategories() {
-        return categoryRepository.findAllByIsActiveTrue()
-                .stream()
+    public List<CategoryResponse> getAllCategories(CategoryType type) {
+        List<Category> categories = type != null
+                ? categoryRepository.findByTypeAndIsActiveTrue(type)
+                : categoryRepository.findAllByIsActiveTrue();
+
+        return categories.stream()
                 .map(this::toResponse)
                 .toList();
     }
@@ -44,11 +48,19 @@ public class CategoryServiceImpl implements CategoryService {
         Category parent = null;
         if (request.parentId() != null) {
             parent = findActiveById(request.parentId());
+            // A category's type has to match its parent's — otherwise a DRESS
+            // category could end up nested under an ACCESSORY one (or vice
+            // versa), which makes "filter by type" meaningless for children.
+            if (parent.getType() != request.type()) {
+                throw new ConflictException(
+                        "Category type must match parent category type (" + parent.getType() + ")");
+            }
         }
 
         Category category = Category.builder()
                 .name(request.name())
                 .slug(request.slug())
+                .type(request.type())
                 .parent(parent)
                 .build();
 
@@ -69,11 +81,18 @@ public class CategoryServiceImpl implements CategoryService {
             category.setSlug(request.slug());
         }
 
+        if (request.type() != null) category.setType(request.type());
+
         if (request.parentId() != null) {
             if (request.parentId().equals(id)) {
                 throw new ConflictException("A category cannot be its own parent");
             }
-            category.setParent(findActiveById(request.parentId()));
+            Category parent = findActiveById(request.parentId());
+            if (parent.getType() != category.getType()) {
+                throw new ConflictException(
+                        "Category type must match parent category type (" + parent.getType() + ")");
+            }
+            category.setParent(parent);
         } else {
             category.setParent(null);
         }
@@ -118,6 +137,7 @@ public class CategoryServiceImpl implements CategoryService {
                 c.getId(),
                 c.getName(),
                 c.getSlug(),
+                c.getType(),
                 c.getParent() != null && Boolean.TRUE.equals(c.getParent().getIsActive()) ? c.getParent().getId() : null,
                 c.getParent() != null && Boolean.TRUE.equals(c.getParent().getIsActive()) ? c.getParent().getName() : null,
                 c.getCreatedAt()

@@ -1,8 +1,13 @@
 package com.blanchebridal.backend.rental.service.impl;
 
 import com.blanchebridal.backend.exception.ConflictException;
+import com.blanchebridal.backend.order.dto.res.OrderItemResponse;
+import com.blanchebridal.backend.order.dto.res.OrderResponse;
 import com.blanchebridal.backend.order.repository.OrderRepository;
 import com.blanchebridal.backend.payment.entity.PaymentMethod;
+import com.blanchebridal.backend.product.entity.ProductType;
+import com.blanchebridal.backend.rental.dto.req.CreateRentalBookingRequest;
+import com.blanchebridal.backend.rental.dto.res.RentableProductResponse;
 import com.blanchebridal.backend.shared.email.EmailService;
 import com.blanchebridal.backend.exception.ResourceNotFoundException;
 import com.blanchebridal.backend.exception.UnauthorizedException;
@@ -21,6 +26,7 @@ import com.blanchebridal.backend.rental.entity.RentalStatus;
 import com.blanchebridal.backend.rental.repository.RentalRepository;
 import com.blanchebridal.backend.rental.service.RentalService;
 import com.blanchebridal.backend.user.entity.User;
+import com.blanchebridal.backend.user.entity.UserRole;
 import com.blanchebridal.backend.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,11 +46,18 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class RentalServiceImpl implements RentalService {
 
+
+    private static final List<RentalStatus> BOOKED_STATUSES =
+            List.of(RentalStatus.PENDING_PAYMENT, RentalStatus.BOOKED, RentalStatus.ACTIVE);
+
+
     private final RentalRepository rentalRepository;
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
     private final OrderRepository orderRepository;
     private final EmailService emailService;
+
+
 
     @Override
     @Transactional
@@ -342,6 +355,109 @@ public class RentalServiceImpl implements RentalService {
         log.info("[RentalScheduler] Expired {} stale rental booking(s).", toExpire.size());
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<RentableProductResponse> getRentableProducts() {
+        return productRepository.findAll().stream()
+                .filter(p -> p.getType() == ProductType.DRESS)
+                .filter(p -> Boolean.TRUE.equals(p.getIsAvailable()))
+                .filter(p -> Boolean.TRUE.equals(p.getIsActive()))
+                .filter(p -> !rentalRepository.existsByProduct_IdAndStatusIn(p.getId(), BOOKED_STATUSES))
+                .map(this::toRentableResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public OrderResponse createRentalBooking(CreateRentalBookingRequest req, UUID callerId, String role) {
+
+        boolean isStaff = role != null &&
+                (role.equals("ROLE_ADMIN") || role.equals("ADMIN") ||
+                        role.equals("ROLE_EMPLOYEE") || role.equals("EMPLOYEE"));
+
+        if (!isStaff) {
+            throw new IllegalStateException("Rental bookings can only be created by staff");
+        }
+
+        User customer = userRepository.findById(req.getCustomerId())
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
+
+        if (customer.getRole() != UserRole.CUSTOMER) {
+            throw new IllegalStateException("Rentals can only be booked for CUSTOMER accounts");
+        }
+
+        Product product = productRepository.findByIdForUpdate(req.getProductId())
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found: " + req.getProductId()));
+
+        if (product.getType() != ProductType.DRESS) {
+            throw new IllegalStateException("Only dresses can be rented: " + product.getName());
+        }
+        if (Boolean.FALSE.equals(product.getIsActive()) || Boolean.FALSE.equals(product.getIsAvailable())) {
+            throw new IllegalStateException("Product is not available: " + product.getName());
+        }
+        if (rentalRepository.existsByProduct_IdAndStatusIn(product.getId(), BOOKED_STATUSES)) {
+            throw new IllegalStateException("This gown is already booked: " + product.getName());
+        }
+
+        // Per-day rate overrides the flat fee when set (Product entity's own
+        // doc comment on rentalPricePerDay).
+        BigDecimal fee;
+        if (product.getRentalPricePerDay() != null) {
+            long days = ChronoUnit.DAYS.between(req.getRentalStart(), req.getRentalEnd());
+            fee = product.getRentalPricePerDay().multiply(BigDecimal.valueOf(days));
+        } else {
+            fee = product.getRentalPrice() != null ? product.getRentalPrice() : BigDecimal.ZERO;
+        }
+
+        String imageUrl = (product.getImages() != null && !product.getImages().isEmpty())
+                ? product.getImages().get(0).getUrl()
+                : null;
+
+        OrderItem item = OrderItem.builder()
+                .product(product)
+                .quantity(1)
+                .unitPrice(fee)
+                .productName(product.getName())
+                .productImage(imageUrl)
+                .build();
+
+        // NO stock decrement — rentals don't touch Product.stock (confirmed
+        // in handover doc §2.4 point 3 / OrderServiceImpl's own comments).
+        Order order = Order.builder()
+                .user(customer)
+                .status(OrderStatus.PENDING)
+                .totalAmount(fee)
+                .notes(req.getNotes())
+                .fulfillmentMethod("PICKUP")
+                .customerPhone(customer.getPhone())
+                .orderMode(OrderMode.WALK_IN)
+                .paymentMethod(req.getPaymentMethod())
+                .isRentalDeposit(true)
+                .items(List.of(item))
+                .build();
+        item.setOrder(order);
+
+        Order savedOrder = orderRepository.save(order);
+
+        Rental rental = Rental.builder()
+                .user(customer)
+                .product(product)
+                .order(savedOrder)
+                .rentalStart(req.getRentalStart())
+                .rentalEnd(req.getRentalEnd())
+                .status(RentalStatus.PENDING_PAYMENT)
+                .depositAmount(fee)
+                .balanceDue(BigDecimal.ZERO)
+                .notes(req.getNotes())
+                .build();
+        rentalRepository.save(rental);
+
+        log.info("[Rental] Created rental booking — order {} / product {} for customer {} (created by {}) — deposit LKR {}",
+                savedOrder.getId(), product.getId(), customer.getId(), callerId, fee);
+
+        return toResponse(savedOrder);
+    }
+
     // ─── Mapper ───────────────────────────────────────────────────────────────
 
     private RentalResponse toResponse(Rental rental) {
@@ -377,6 +493,69 @@ public class RentalServiceImpl implements RentalService {
                 .balanceDue(rental.getBalanceDue())
                 .notes(rental.getNotes())
                 .createdAt(rental.getCreatedAt())
+                .build();
+    }
+
+    private RentableProductResponse toRentableResponse(Product p) {
+        return RentableProductResponse.builder()
+                .id(p.getId())
+                .name(p.getName())
+                .type(p.getType())
+                .rentalPrice(p.getRentalPrice())
+                .rentalPricePerDay(p.getRentalPricePerDay())
+                .categoryName(p.getCategory() != null ? p.getCategory().getName() : null)
+                .firstImageUrl((p.getImages() != null && !p.getImages().isEmpty())
+                        ? p.getImages().get(0).getUrl()
+                        : null)
+                .build();
+    }
+
+    // Mirrors OrderServiceImpl.toResponse/toItemResponse exactly, duplicated
+    // here rather than made public on OrderService — keeps RentalService
+    // independent and avoids widening OrderService's contract for one caller.
+    private OrderResponse toResponse(Order order) {
+        List<OrderItemResponse> itemResponses = order.getItems() == null
+                ? List.of()
+                : order.getItems().stream().map(this::toItemResponse).toList();
+
+        String email = order.getUser() != null ? order.getUser().getEmail() : null;
+        String firstName = order.getUser() != null ? order.getUser().getFirstName() : null;
+        String lastName = order.getUser() != null ? order.getUser().getLastName() : null;
+
+        return OrderResponse.builder()
+                .id(order.getId())
+                .status(order.getStatus())
+                .totalAmount(order.getTotalAmount())
+                .notes(order.getNotes())
+                .items(itemResponses)
+                .createdAt(order.getCreatedAt())
+                .updatedAt(order.getUpdatedAt())
+                .customerEmail(email)
+                .customerFirstName(firstName)
+                .customerLastName(lastName)
+                .fulfillmentMethod(order.getFulfillmentMethod())
+                .deliveryAddress(order.getDeliveryAddress())
+                .customerPhone(order.getCustomerPhone())
+                .orderMode(order.getOrderMode())
+                .paymentMethod(order.getPaymentMethod())
+                .isRentalDeposit(order.getIsRentalDeposit())
+                .discountType(order.getDiscountType())
+                .discountValue(order.getDiscountValue())
+                .discountReason(order.getDiscountReason())
+                .build();
+    }
+
+    private OrderItemResponse toItemResponse(OrderItem item) {
+        BigDecimal subtotal = item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
+        return OrderItemResponse.builder()
+                .productId(item.getProduct() != null ? item.getProduct().getId() : null)
+                .productName(item.getProductName())
+                .productImage(item.getProductImage())
+                .productType(item.getProduct() != null ? item.getProduct().getType() : null)
+                .quantity(item.getQuantity())
+                .unitPrice(item.getUnitPrice())
+                .size(item.getSize())
+                .subtotal(subtotal)
                 .build();
     }
 }

@@ -96,7 +96,9 @@ public class ProductController {
     @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> create(
             @Valid @RequestBody CreateProductRequest request) {
-        log.info("[Product] Create → name: {}, type: {}", request.name(), request.type());
+        // type is no longer sent by the client — it's derived server-side
+        // from the product's category. Log categoryId instead.
+        log.info("[Product] Create → name: {}, categoryId: {}", request.name(), request.categoryId());
         return ResponseEntity.ok(Map.of("success", true,
                 "data", productService.createProduct(request)));
     }
@@ -179,14 +181,6 @@ public class ProductController {
     }
 
     // ── Cloudinary signed upload ────────────────────────────────────────────
-    // Shared by both the admin product-image flow and the customer-facing
-    // custom-design reference-image flow. Method-level @PreAuthorize allows
-    // both roles broadly; the actual destination folder is resolved from a
-    // fixed server-side allowlist keyed by `context` (never taken directly
-    // from client input, so a caller can't sign into an arbitrary Cloudinary
-    // path). The "product" context is further gated to ADMIN only via
-    // requireAdmin() below, since a CUSTOMER should never write into the
-    // real product-photo folder.
     @GetMapping("/upload-signature")
     @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER')")
     public ResponseEntity<Map<String, Object>> getUploadSignature(
