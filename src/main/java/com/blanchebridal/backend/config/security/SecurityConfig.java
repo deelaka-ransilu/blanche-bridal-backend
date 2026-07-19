@@ -52,7 +52,8 @@ public class SecurityConfig {
                                 org.springframework.http.HttpMethod.GET,
                                 "/api/products/**",
                                 "/api/categories/**",
-                                "/api/appointments/slots"
+                                "/api/appointments/slots",
+                                "/api/gallery/**"
                         ).permitAll()
                         // Public contact form submission (guest inquiries)
                         .requestMatchers(
