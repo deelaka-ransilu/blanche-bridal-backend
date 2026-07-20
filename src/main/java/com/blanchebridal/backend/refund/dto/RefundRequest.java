@@ -4,5 +4,6 @@ import lombok.Data;
 
 @Data
 public class RefundRequest {
-    private String reason; // optional
+    private String reason;
+    private String proofImageUrl; // required — validated in service, not here
 }

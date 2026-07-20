@@ -220,13 +220,6 @@ public class ReceiptServiceImpl implements ReceiptService {
                 .setTextAlignment(TextAlignment.CENTER)
                 .setMarginBottom(4));
 
-        document.add(new Paragraph("Official Receipt")
-                .setFont(regular)
-                .setFontSize(12)
-                .setTextAlignment(TextAlignment.CENTER)
-                .setFontColor(MUTED_FOREGROUND)
-                .setMarginBottom(12));
-
         // Thin brand-colored rule under the header, echoing the site's
         // primary accent rather than a plain gray divider.
         document.add(new com.itextpdf.layout.element.Div()
@@ -240,7 +233,7 @@ public class ReceiptServiceImpl implements ReceiptService {
         document.add(metaLine("Issue Date:",
                 LocalDateTime.now().format(DATE_FMT), bold, regular));
         document.add(metaLine("Order ID:",
-                order.getId().toString(), bold, regular));
+                order.getId().toString().substring(0, 8).toUpperCase(), bold, regular));
         document.add(metaLine("Order Date:",
                 order.getCreatedAt().format(DATE_FMT), bold, regular));
 

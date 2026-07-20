@@ -3,7 +3,13 @@ package com.blanchebridal.backend.order.service.impl;
 import com.blanchebridal.backend.order.entity.DiscountType;
 import com.blanchebridal.backend.order.entity.OrderMode;
 import com.blanchebridal.backend.order.repository.OrderRepository;
+import com.blanchebridal.backend.payment.entity.Payment;
 import com.blanchebridal.backend.payment.entity.PaymentMethod;
+import com.blanchebridal.backend.payment.entity.PaymentStatus;
+import com.blanchebridal.backend.payment.repository.PaymentRepository;
+import com.blanchebridal.backend.refund.entity.Refund;
+import com.blanchebridal.backend.refund.repository.RefundBankDetailsRepository;
+import com.blanchebridal.backend.refund.repository.RefundRepository;
 import com.blanchebridal.backend.shared.email.EmailService;
 import com.blanchebridal.backend.exception.ResourceNotFoundException;
 import com.blanchebridal.backend.exception.UnauthorizedException;
@@ -41,6 +47,9 @@ public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
+    private final PaymentRepository paymentRepository;
+    private final RefundRepository refundRepository;
+    private final RefundBankDetailsRepository refundBankDetailsRepository;
     private final EmailService emailService;
 
     @Override
@@ -236,10 +245,20 @@ public class OrderServiceImpl implements OrderService {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + id));
 
+        OrderStatus previousStatus = order.getStatus();
+
+        // Terminal states don't transition anywhere — a cancelled or completed
+        // order is done. Re-requesting the same terminal status is a harmless
+        // no-op (idempotent double-click), but moving OUT of one is not allowed.
+        if (isTerminal(previousStatus) && newStatus != previousStatus) {
+            throw new IllegalStateException(
+                    "Order " + id + " is " + previousStatus + " and cannot be changed to " + newStatus);
+        }
+
         // Restore reserved stock if staff cancels via this path too — not
         // just the customer-facing cancelOrder() below. Without this, a
         // staff-side cancel leaks the reservation forever.
-        if (newStatus == OrderStatus.CANCELLED && order.getStatus() != OrderStatus.CANCELLED) {
+        if (newStatus == OrderStatus.CANCELLED && previousStatus != OrderStatus.CANCELLED) {
             restoreStock(order);
         }
 
@@ -247,31 +266,22 @@ public class OrderServiceImpl implements OrderService {
         Order saved = orderRepository.save(order);
         log.info("[Order] Status updated — {} for order {}", newStatus, id);
 
-        if (newStatus == OrderStatus.CONFIRMED) {
-            try {
-                User customer = saved.getUser();
-                if (customer != null) {
-                    List<String> itemSummaries = saved.getItems().stream()
-                            .map(item -> item.getProductName()
-                                    + " × " + item.getQuantity()
-                                    + " — LKR " + item.getUnitPrice())
-                            .collect(Collectors.toList());
-
-                    emailService.sendOrderConfirmationEmail(
-                            customer.getEmail(),
-                            customer.getFirstName() + " " + customer.getLastName(),
-                            saved.getId().toString().substring(0, 8).toUpperCase(),
-                            saved.getTotalAmount(),
-                            itemSummaries
-                    );
-                }
-            } catch (Exception e) {
-                log.warn("Failed to send order confirmation email for order {}: {}",
-                        saved.getId(), e.getMessage());
+        if (newStatus != previousStatus) {
+            if (newStatus == OrderStatus.CONFIRMED) {
+                sendConfirmationEmailSafely(saved);
+            } else if (newStatus == OrderStatus.READY) {
+                sendReadyEmailSafely(saved);
+            } else if (newStatus == OrderStatus.CANCELLED) {
+                sendCancelledEmailSafely(saved);
             }
         }
 
         return toResponse(saved);
+    }
+
+    // Terminal = no further transitions allowed out of this state.
+    private boolean isTerminal(OrderStatus status) {
+        return status == OrderStatus.CANCELLED || status == OrderStatus.COMPLETED;
     }
 
     @Override
@@ -293,8 +303,10 @@ public class OrderServiceImpl implements OrderService {
         restoreStock(order);
 
         order.setStatus(OrderStatus.CANCELLED);
-        orderRepository.save(order);
+        Order saved = orderRepository.save(order);
         log.info("[Order] Cancelled order {} by user {}", id, userId);
+
+        sendCancelledEmailSafely(saved);
     }
 
     // Gives back the stock reserved at createOrder time. Shared by both
@@ -316,6 +328,80 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
+    // ─── Email hooks ────────────────────────────────────────────────────────
+    // Each is wrapped in try/catch so an email failure never rolls back or
+    // interrupts the status-change transaction it's called from.
+
+    private void sendConfirmationEmailSafely(Order order) {
+        try {
+            User customer = order.getUser();
+            if (customer == null || customer.getEmail() == null) return;
+
+            List<String> itemSummaries = order.getItems().stream()
+                    .map(item -> item.getProductName()
+                            + " × " + item.getQuantity()
+                            + " — LKR " + item.getUnitPrice())
+                    .collect(Collectors.toList());
+
+            emailService.sendOrderConfirmationEmail(
+                    customer.getEmail(),
+                    customer.getFirstName() + " " + customer.getLastName(),
+                    order.getId().toString().substring(0, 8).toUpperCase(),
+                    order.getTotalAmount(),
+                    itemSummaries
+            );
+        } catch (Exception e) {
+            log.warn("Failed to send order confirmation email for order {}: {}",
+                    order.getId(), e.getMessage());
+        }
+    }
+
+    private void sendReadyEmailSafely(Order order) {
+        try {
+            User customer = order.getUser();
+            if (customer == null || customer.getEmail() == null) return;
+
+            String fulfillmentMethod = order.getFulfillmentMethod() != null
+                    ? order.getFulfillmentMethod()
+                    : "PICKUP";
+
+            emailService.sendOrderReadyEmail(
+                    customer.getEmail(),
+                    customer.getFirstName() + " " + customer.getLastName(),
+                    order.getId().toString().substring(0, 8).toUpperCase(),
+                    fulfillmentMethod
+            );
+        } catch (Exception e) {
+            log.warn("Failed to send order-ready email for order {}: {}",
+                    order.getId(), e.getMessage());
+        }
+    }
+
+    private void sendCancelledEmailSafely(Order order) {
+        try {
+            User customer = order.getUser();
+            if (customer == null || customer.getEmail() == null) return;
+
+            boolean refundOwed = paymentRepository.findByOrder_Id(order.getId())
+                    .map(p -> p.getStatus() == PaymentStatus.COMPLETED)
+                    .orElse(false);
+
+            String customerName = (customer.getFirstName() != null ? customer.getFirstName() : "")
+                    + (customer.getLastName() != null ? " " + customer.getLastName() : "");
+            customerName = customerName.isBlank() ? "Customer" : customerName.trim();
+
+            emailService.sendOrderCancelledEmail(
+                    order.getUser().getEmail(),
+                    customerName,
+                    order.getId().toString(),   // full UUID, not truncated
+                    refundOwed
+            );
+        } catch (Exception e) {
+            log.warn("Failed to send order-cancelled email for order {}: {}",
+                    order.getId(), e.getMessage());
+        }
+    }
+
     private OrderResponse toResponse(Order order) {
         List<OrderItemResponse> itemResponses = order.getItems() == null
                 ? List.of()
@@ -324,6 +410,10 @@ public class OrderServiceImpl implements OrderService {
         String email = order.getUser() != null ? order.getUser().getEmail() : null;
         String firstName = order.getUser() != null ? order.getUser().getFirstName() : null;
         String lastName = order.getUser() != null ? order.getUser().getLastName() : null;
+
+        Payment payment = paymentRepository.findByOrder_Id(order.getId()).orElse(null);
+        Refund refund = refundRepository.findByOrder_Id(order.getId()).orElse(null);
+        boolean bankDetailsSubmitted = refundBankDetailsRepository.existsByOrder_Id(order.getId());
 
         return OrderResponse.builder()
                 .id(order.getId())
@@ -345,6 +435,11 @@ public class OrderServiceImpl implements OrderService {
                 .discountType(order.getDiscountType())
                 .discountValue(order.getDiscountValue())
                 .discountReason(order.getDiscountReason())
+                .paymentStatus(payment != null ? payment.getStatus() : null)
+                .refundAmount(refund != null ? refund.getAmount() : null)
+                .refundedAt(refund != null ? refund.getCreatedAt() : null)
+                .refundProofImageUrl(refund != null ? refund.getProofImageUrl() : null)   // ← ADD THIS LINE
+                .bankDetailsSubmitted(bankDetailsSubmitted)
                 .build();
     }
 

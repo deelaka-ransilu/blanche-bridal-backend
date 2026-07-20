@@ -39,6 +39,13 @@ public class Refund {
     @EqualsAndHashCode.Exclude
     private User processedByAdmin;
 
+    // Screenshot/receipt of the manual bank transfer, uploaded by admin at
+    // the same time as issuing the refund. Nullable only for safety at the
+    // entity level — the service layer requires it before creating a Refund
+    // at all (see RefundServiceImpl.createRefund).
+    @Column(name = "proof_image_url", length = 500)
+    private String proofImageUrl;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

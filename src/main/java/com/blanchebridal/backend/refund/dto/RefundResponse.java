@@ -14,6 +14,7 @@ public class RefundResponse {
     private UUID orderId;
     private BigDecimal amount;
     private String reason;
+    private String proofImageUrl;
     private UUID processedByAdminId;
     private LocalDateTime createdAt;
 }

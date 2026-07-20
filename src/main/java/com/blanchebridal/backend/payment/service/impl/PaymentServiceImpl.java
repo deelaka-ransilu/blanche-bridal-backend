@@ -16,6 +16,7 @@ import com.blanchebridal.backend.payment.service.ReceiptService;
 import com.blanchebridal.backend.payment.util.PayHereUtil;
 import com.blanchebridal.backend.rental.entity.RentalStatus;
 import com.blanchebridal.backend.rental.repository.RentalRepository;
+import com.blanchebridal.backend.shared.email.EmailService;
 import com.blanchebridal.backend.user.entity.User;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -37,6 +39,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final RentalRepository   rentalRepository;
     private final PayHereUtil        payHereUtil;
     private final ReceiptService     receiptService;
+    private final EmailService       emailService;
 
     @Value("${payhere.merchant-id}") private String merchantId;
     @Value("${payhere.return-url}")  private String returnUrl;
@@ -158,6 +161,8 @@ public class PaymentServiceImpl implements PaymentService {
 
             log.info("Payment COMPLETED for order {}. PayHere ID: {}", orderId, payherePaymentId);
 
+            sendOrderConfirmationEmailSafely(order);
+
             if (Boolean.TRUE.equals(order.getIsRentalDeposit())) {
                 handleRentalDepositConfirmed(order);
             }
@@ -211,6 +216,8 @@ public class PaymentServiceImpl implements PaymentService {
         orderRepository.save(order);
 
         log.info("[Payment] Cash payment CONFIRMED for order {}", orderId);
+
+        sendOrderConfirmationEmailSafely(order);
 
         if (Boolean.TRUE.equals(order.getIsRentalDeposit())) {
             handleRentalDepositConfirmed(order);
@@ -270,5 +277,53 @@ public class PaymentServiceImpl implements PaymentService {
                     rental.getId(), order.getId());
         }, () -> log.warn("[Rental] Order {} flagged isRentalDeposit=true but no linked Rental found.",
                 order.getId()));
+    }
+
+    // ─── Order-confirmation email hook ─────────────────────────────────────
+
+    /**
+     * Sends the order-confirmation email to the customer once payment is
+     * confirmed (PayHere webhook success or cash confirmation).
+     * Wrapped in try/catch so an email failure (SMTP down, bad address,
+     * etc.) never breaks payment confirmation — this is called from the
+     * PayHere webhook path too, which MUST always return 200 regardless of
+     * what happens downstream.
+     */
+    private void sendOrderConfirmationEmailSafely(Order order) {
+        try {
+            User user = order.getUser();
+            if (user == null || user.getEmail() == null || user.getEmail().isBlank()) {
+                log.warn("[Payment] Order {} has no user/email — skipping confirmation email.", order.getId());
+                return;
+            }
+
+            List<String> itemSummaries = order.getItems() != null
+                    ? order.getItems().stream()
+                      .map(item -> item.getProductName())
+                      .toList()
+                    : List.of();
+
+            String firstName = user.getFirstName() != null ? user.getFirstName() : "";
+            String lastName  = user.getLastName()  != null ? user.getLastName()  : "";
+            String customerName = (firstName + " " + lastName).trim();
+            if (customerName.isEmpty()) {
+                customerName = "Customer";
+            }
+
+            emailService.sendOrderConfirmationEmail(
+                    user.getEmail(),
+                    customerName,
+                    order.getId().toString(),
+                    order.getTotalAmount(),
+                    itemSummaries
+            );
+
+            log.info("[Payment] Order confirmation email sent for order {} to {}",
+                    order.getId(), user.getEmail());
+
+        } catch (Exception e) {
+            log.error("[Payment] Failed to send order confirmation email for order {}: {}",
+                    order.getId(), e.getMessage(), e);
+        }
     }
 }

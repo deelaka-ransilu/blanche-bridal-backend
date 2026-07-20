@@ -36,6 +36,11 @@ public class EmailServiceImpl implements EmailService {
     private static final DateTimeFormatter DATE_FORMAT =
             DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy");
 
+    // Single brand color used across every email template — headers,
+    // buttons, links, and the footer signature all use this so every
+    // email looks consistent regardless of which flow triggered it.
+    private static final String BRAND_COLOR = "#c8102e";
+
     @Async
     @Override
     public void sendVerificationEmail(String toEmail, String token) {
@@ -47,14 +52,14 @@ public class EmailServiceImpl implements EmailService {
             <html>
             <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
                 <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px; text-align:center;">
-                    <h1 style="color:#c8102e; margin-bottom:10px;">Welcome to Blanche Bridal</h1>
+                    <h1 style="color:%s; margin-bottom:10px;">Welcome to Blanche Bridal</h1>
 
                     <p style="color:#444444; font-size:16px; line-height:1.6;">
                         Please verify your email address by clicking the button below.
                     </p>
 
                     <a href="%s"
-                       style="display:inline-block; margin-top:20px; padding:14px 28px; background-color:#c8102e; color:#ffffff; text-decoration:none; border-radius:8px; font-weight:bold;">
+                       style="display:inline-block; margin-top:20px; padding:14px 28px; background-color:%s; color:#ffffff; text-decoration:none; border-radius:8px; font-weight:bold;">
                         Verify Email
                     </a>
 
@@ -66,13 +71,13 @@ public class EmailServiceImpl implements EmailService {
                         If you did not create an account, you can ignore this email.
                     </p>
 
-                    <p style="font-size:14px; color:#c8102e; margin-top:28px;">
+                    <p style="font-size:14px; color:%s; margin-top:28px;">
                         Blanche Bridal
                     </p>
                 </div>
             </body>
             </html>
-            """.formatted(link);
+            """.formatted(BRAND_COLOR, link, BRAND_COLOR, BRAND_COLOR);
 
         sendHtmlEmail(toEmail, "Verify your Blanche Bridal account", html);
     }
@@ -88,14 +93,14 @@ public class EmailServiceImpl implements EmailService {
             <html>
             <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
                 <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px; text-align:center;">
-                    <h1 style="color:#c8102e; margin-bottom:10px;">Reset Your Password</h1>
+                    <h1 style="color:%s; margin-bottom:10px;">Reset Your Password</h1>
 
                     <p style="color:#444444; font-size:16px; line-height:1.6;">
                         You requested a password reset for your Blanche Bridal account.
                     </p>
 
                     <a href="%s"
-                       style="display:inline-block; margin-top:20px; padding:14px 28px; background-color:#c8102e; color:#ffffff; text-decoration:none; border-radius:8px; font-weight:bold;">
+                       style="display:inline-block; margin-top:20px; padding:14px 28px; background-color:%s; color:#ffffff; text-decoration:none; border-radius:8px; font-weight:bold;">
                         Reset Password
                     </a>
 
@@ -107,13 +112,13 @@ public class EmailServiceImpl implements EmailService {
                         If you did not request this, you can safely ignore this email.
                     </p>
 
-                    <p style="font-size:14px; color:#c8102e; margin-top:28px;">
+                    <p style="font-size:14px; color:%s; margin-top:28px;">
                         Blanche Bridal
                     </p>
                 </div>
             </body>
             </html>
-            """.formatted(link);
+            """.formatted(BRAND_COLOR, link, BRAND_COLOR, BRAND_COLOR);
 
         sendHtmlEmail(toEmail, "Reset your Blanche Bridal password", html);
     }
@@ -153,7 +158,7 @@ public class EmailServiceImpl implements EmailService {
                 <html>
                 <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
                     <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
-                        <h1 style="color:#8b5e57; text-align:center;">Order Confirmed</h1>
+                        <h1 style="color:%s; text-align:center;">Order Confirmed</h1>
 
                         <p style="color:#444444; font-size:16px; line-height:1.6;">
                             Dear %s,
@@ -163,7 +168,7 @@ public class EmailServiceImpl implements EmailService {
                             Your order has been confirmed. Here's a summary:
                         </p>
 
-                        <p style="color:#8b5e57; font-weight:bold;">
+                        <p style="color:%s; font-weight:bold;">
                             Order ID: #%s
                         </p>
 
@@ -179,17 +184,20 @@ public class EmailServiceImpl implements EmailService {
                             Thank you for shopping with Blanche Bridal.
                         </p>
 
-                        <p style="font-size:14px; color:#8b5e57; text-align:center; margin-top:28px;">
+                        <p style="font-size:14px; color:%s; text-align:center; margin-top:28px;">
                             Blanche Bridal
                         </p>
                     </div>
                 </body>
                 </html>
                 """.formatted(
+                BRAND_COLOR,
                 escapeHtml(customerName),
+                BRAND_COLOR,
                 escapeHtml(orderId),
                 itemHtml,
-                totalAmount
+                totalAmount,
+                BRAND_COLOR
         );
 
         sendHtmlEmail(toEmail, "Your Blanche Bridal order is confirmed - #" + orderId, html);
@@ -221,7 +229,7 @@ public class EmailServiceImpl implements EmailService {
             <html>
             <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
                 <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
-                    <h1 style="color:#8b5e57; text-align:center;">Appointment Confirmed ✓</h1>
+                    <h1 style="color:%s; text-align:center;">Appointment Confirmed ✓</h1>
 
                     <p style="color:#444444; font-size:16px; line-height:1.6;">Dear %s,</p>
 
@@ -247,18 +255,20 @@ public class EmailServiceImpl implements EmailService {
                         Please arrive 5 minutes before your appointment time.
                     </p>
 
-                    <p style="font-size:14px; color:#8b5e57; text-align:center; margin-top:28px;">
+                    <p style="font-size:14px; color:%s; text-align:center; margin-top:28px;">
                         Blanche Bridal Couture
                     </p>
                 </div>
             </body>
             </html>
             """.formatted(
+                BRAND_COLOR,
                 escapeHtml(customerName),
                 escapeHtml(formattedType),
                 escapeHtml(dateStr),
                 escapeHtml(timeSlot),
-                productHtml
+                productHtml,
+                BRAND_COLOR
         );
 
         byte[] ical = buildIcalBytes(appointmentId, appointmentDate, timeSlot,
@@ -270,6 +280,11 @@ public class EmailServiceImpl implements EmailService {
                 html,
                 ical
         );
+    }
+
+    @Override
+    public void sendAppointmentConfirmationEmail(String toEmail, String customerName, LocalDate appointmentDate, String timeSlot, String appointmentType, String productName) {
+        EmailService.super.sendAppointmentConfirmationEmail(toEmail, customerName, appointmentDate, timeSlot, appointmentType, productName);
     }
 
     @Async
@@ -298,7 +313,7 @@ public class EmailServiceImpl implements EmailService {
             <html>
             <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
                 <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
-                    <h1 style="color:#8b5e57; text-align:center;">Booking Received</h1>
+                    <h1 style="color:%s; text-align:center;">Booking Received</h1>
 
                     <p style="color:#444444; font-size:16px; line-height:1.6;">Dear %s,</p>
 
@@ -325,18 +340,20 @@ public class EmailServiceImpl implements EmailService {
                         while you wait for confirmation.
                     </p>
 
-                    <p style="font-size:14px; color:#8b5e57; text-align:center; margin-top:28px;">
+                    <p style="font-size:14px; color:%s; text-align:center; margin-top:28px;">
                         Blanche Bridal Couture
                     </p>
                 </div>
             </body>
             </html>
             """.formatted(
+                BRAND_COLOR,
                 escapeHtml(customerName),
                 escapeHtml(formattedType),
                 escapeHtml(dateStr),
                 escapeHtml(timeSlot),
-                productHtml
+                productHtml,
+                BRAND_COLOR
         );
 
         byte[] ical = buildIcalBytes(appointmentId, appointmentDate, timeSlot,
@@ -366,7 +383,7 @@ public class EmailServiceImpl implements EmailService {
                 <html>
                 <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
                     <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
-                        <h1 style="color:#8b5e57; text-align:center;">Appointment Reminder</h1>
+                        <h1 style="color:%s; text-align:center;">Appointment Reminder</h1>
 
                         <p style="color:#444444; font-size:16px; line-height:1.6;">
                             Dear %s,
@@ -389,17 +406,19 @@ public class EmailServiceImpl implements EmailService {
                             Please contact us if you need to reschedule.
                         </p>
 
-                        <p style="font-size:14px; color:#8b5e57; text-align:center; margin-top:28px;">
+                        <p style="font-size:14px; color:%s; text-align:center; margin-top:28px;">
                             Blanche Bridal
                         </p>
                     </div>
                 </body>
                 </html>
                 """.formatted(
+                BRAND_COLOR,
                 escapeHtml(customerName),
                 escapeHtml(formattedType),
                 escapeHtml(dateStr),
-                escapeHtml(timeSlot)
+                escapeHtml(timeSlot),
+                BRAND_COLOR
         );
 
         sendHtmlEmail(toEmail, "Reminder: Your appointment tomorrow at " + timeSlot, html);
@@ -418,10 +437,10 @@ public class EmailServiceImpl implements EmailService {
         String balanceHtml = "";
         if (balanceDue != null && balanceDue.compareTo(BigDecimal.ZERO) > 0) {
             balanceHtml = """
-                    <p style="font-size:17px; color:#b00020; font-weight:bold;">
+                    <p style="font-size:17px; color:%s; font-weight:bold;">
                         Outstanding balance: LKR %s
                     </p>
-                    """.formatted(balanceDue);
+                    """.formatted(BRAND_COLOR, balanceDue);
         }
 
         String html = """
@@ -429,7 +448,7 @@ public class EmailServiceImpl implements EmailService {
                 <html>
                 <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
                     <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
-                        <h1 style="color:#b00020; text-align:center;">Rental Return Overdue</h1>
+                        <h1 style="color:%s; text-align:center;">Rental Return Overdue</h1>
 
                         <p style="color:#444444; font-size:16px; line-height:1.6;">
                             Dear %s,
@@ -445,17 +464,19 @@ public class EmailServiceImpl implements EmailService {
                             Please return the item as soon as possible or contact us to arrange.
                         </p>
 
-                        <p style="font-size:14px; color:#8b5e57; text-align:center; margin-top:28px;">
+                        <p style="font-size:14px; color:%s; text-align:center; margin-top:28px;">
                             Blanche Bridal
                         </p>
                     </div>
                 </body>
                 </html>
                 """.formatted(
+                BRAND_COLOR,
                 escapeHtml(customerName),
                 escapeHtml(productName),
                 escapeHtml(dateStr),
-                balanceHtml
+                balanceHtml,
+                BRAND_COLOR
         );
 
         sendHtmlEmail(toEmail, "Action required: Rental return overdue", html);
@@ -475,7 +496,7 @@ public class EmailServiceImpl implements EmailService {
                 <html>
                 <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
                     <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
-                        <h1 style="color:#8b5e57; text-align:center; margin-bottom:6px;">
+                        <h1 style="color:%s; text-align:center; margin-bottom:6px;">
                             Welcome to Blanche Bridal
                         </h1>
                         <p style="text-align:center; color:#999999; font-size:14px; margin-top:0;">
@@ -509,7 +530,7 @@ public class EmailServiceImpl implements EmailService {
 
                         <div style="text-align:center; margin-top:28px;">
                             <a href="%s"
-                               style="display:inline-block; padding:14px 32px; background-color:#8b5e57; color:#ffffff;
+                               style="display:inline-block; padding:14px 32px; background-color:%s; color:#ffffff;
                                       text-decoration:none; border-radius:8px; font-weight:bold; font-size:15px;">
                                 Sign In
                             </a>
@@ -519,18 +540,21 @@ public class EmailServiceImpl implements EmailService {
                             If you did not expect this email, please contact your system administrator.
                         </p>
 
-                        <p style="font-size:14px; color:#8b5e57; text-align:center; margin-top:28px;">
+                        <p style="font-size:14px; color:%s; text-align:center; margin-top:28px;">
                             Blanche Bridal
                         </p>
                     </div>
                 </body>
                 </html>
                 """.formatted(
+                BRAND_COLOR,
                 escapeHtml(firstName),
                 escapeHtml(lastName),
                 escapeHtml(toEmail),
                 escapeHtml(temporaryPassword),
-                loginLink
+                loginLink,
+                BRAND_COLOR,
+                BRAND_COLOR
         );
 
         sendHtmlEmail(toEmail, "Your Blanche Bridal admin account is ready", html);
@@ -551,7 +575,7 @@ public class EmailServiceImpl implements EmailService {
         <html>
         <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
             <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
-                <h1 style="color:#8b5e57; text-align:center;">Appointment Rescheduled</h1>
+                <h1 style="color:%s; text-align:center;">Appointment Rescheduled</h1>
 
                 <p style="color:#444444; font-size:16px; line-height:1.6;">Dear %s,</p>
 
@@ -573,17 +597,19 @@ public class EmailServiceImpl implements EmailService {
                     If you have any questions, please contact us directly.
                 </p>
 
-                <p style="font-size:14px; color:#8b5e57; text-align:center; margin-top:28px;">
+                <p style="font-size:14px; color:%s; text-align:center; margin-top:28px;">
                     Blanche Bridal Couture
                 </p>
             </div>
         </body>
         </html>
         """.formatted(
+                BRAND_COLOR,
                 escapeHtml(customerName),
                 escapeHtml(formattedType),
                 escapeHtml(dateStr),
-                escapeHtml(newTimeSlot)
+                escapeHtml(newTimeSlot),
+                BRAND_COLOR
         );
 
         sendHtmlEmail(toEmail, "Your appointment has been rescheduled — " + dateStr + " at " + newTimeSlot, html);
@@ -598,7 +624,7 @@ public class EmailServiceImpl implements EmailService {
         <html>
         <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
             <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
-                <h1 style="color:#8b5e57; text-align:center;">Response to Your Enquiry</h1>
+                <h1 style="color:%s; text-align:center;">Response to Your Enquiry</h1>
 
                 <p style="color:#444444; font-size:16px; line-height:1.6;">Dear %s,</p>
 
@@ -606,7 +632,7 @@ public class EmailServiceImpl implements EmailService {
                     Thank you for reaching out to Blanche Bridal. Here is our response to your enquiry:
                 </p>
 
-                <div style="background-color:#f8f3f0; padding:18px; border-radius:10px; margin:20px 0; border-left:4px solid #8b5e57;">
+                <div style="background-color:#f8f3f0; padding:18px; border-radius:10px; margin:20px 0; border-left:4px solid %s;">
                     <p style="color:#444444; font-size:15px; line-height:1.7; margin:0; white-space:pre-wrap;">%s</p>
                 </div>
 
@@ -617,16 +643,19 @@ public class EmailServiceImpl implements EmailService {
                     %s
                 </p>
 
-                <p style="font-size:14px; color:#8b5e57; text-align:center; margin-top:28px;">
+                <p style="font-size:14px; color:%s; text-align:center; margin-top:28px;">
                     Blanche Bridal Couture
                 </p>
             </div>
         </body>
         </html>
         """.formatted(
+                BRAND_COLOR,
                 escapeHtml(customerName),
+                BRAND_COLOR,
                 escapeHtml(replyMessage),
-                escapeHtml(originalMessage)
+                escapeHtml(originalMessage),
+                BRAND_COLOR
         );
 
         sendHtmlEmail(toEmail, "Re: Your Blanche Bridal Enquiry", html);
@@ -647,7 +676,7 @@ public class EmailServiceImpl implements EmailService {
     <html>
     <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
         <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
-            <h1 style="color:#b00020; text-align:center;">Appointment Cancelled</h1>
+            <h1 style="color:%s; text-align:center;">Appointment Cancelled</h1>
 
             <p style="color:#444444; font-size:16px; line-height:1.6;">Dear %s,</p>
 
@@ -669,20 +698,258 @@ public class EmailServiceImpl implements EmailService {
                 book again from your account.
             </p>
 
-            <p style="font-size:14px; color:#8b5e57; text-align:center; margin-top:28px;">
+            <p style="font-size:14px; color:%s; text-align:center; margin-top:28px;">
                 Blanche Bridal Couture
             </p>
         </div>
     </body>
     </html>
     """.formatted(
+                BRAND_COLOR,
                 escapeHtml(customerName),
                 escapeHtml(formattedType),
                 escapeHtml(dateStr),
-                escapeHtml(timeSlot)
+                escapeHtml(timeSlot),
+                BRAND_COLOR
         );
 
         sendHtmlEmail(toEmail, "Your appointment on " + dateStr + " has been cancelled", html);
+    }
+
+    @Async
+    @Override
+    public void sendOrderReadyEmail(String toEmail,
+                                    String customerName,
+                                    String orderId,
+                                    String fulfillmentMethod) {
+
+        boolean isPickup = "PICKUP".equalsIgnoreCase(fulfillmentMethod);
+
+        String headline = isPickup ? "Your Order is Ready for Pickup" : "Your Order is Ready to Ship";
+        String bodyText = isPickup
+                ? "Great news — your order is packed and ready for you to collect from our store."
+                : "Great news — your order is packed and ready to be shipped to your delivery address.";
+
+        String html = """
+            <!DOCTYPE html>
+            <html>
+            <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
+                <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
+                    <h1 style="color:%s; text-align:center;">%s</h1>
+
+                    <p style="color:#444444; font-size:16px; line-height:1.6;">
+                        Dear %s,
+                    </p>
+
+                    <p style="color:#444444; font-size:16px; line-height:1.6;">
+                        %s
+                    </p>
+
+                    <p style="color:%s; font-weight:bold;">
+                        Order ID: #%s
+                    </p>
+
+                    <p style="color:#444444; font-size:16px; line-height:1.6;">
+                        %s
+                    </p>
+
+                    <p style="font-size:14px; color:%s; text-align:center; margin-top:28px;">
+                        Blanche Bridal
+                    </p>
+                </div>
+            </body>
+            </html>
+            """.formatted(
+                BRAND_COLOR,
+                headline,
+                escapeHtml(customerName),
+                bodyText,
+                BRAND_COLOR,
+                escapeHtml(orderId),
+                isPickup
+                        ? "Please bring a valid ID when collecting your order. We look forward to seeing you."
+                        : "You'll receive tracking details separately once the item is handed to the courier.",
+                BRAND_COLOR
+        );
+
+        sendHtmlEmail(toEmail, "Your Blanche Bridal order is ready - #" + orderId, html);
+    }
+
+    @Async
+    @Override
+    public void sendOrderCancelledEmail(String toEmail,
+                                        String customerName,
+                                        String fullOrderId,   // full UUID, not truncated
+                                        boolean refundOwed) {
+
+        // Display-only short ID, same truncation style used everywhere else
+        // (frontend does order.id.slice(0,8).toUpperCase() — mirror it here)
+        String displayId = fullOrderId.length() >= 8
+                ? fullOrderId.substring(0, 8).toUpperCase()
+                : fullOrderId.toUpperCase();
+
+        // Link must use the FULL id — that's what Next.js route /my/orders/[id]
+        // actually resolves against, not the shortened display version.
+        String refundLink = frontendUrl + "/my/orders/" + fullOrderId;
+
+        String refundHtml = refundOwed
+                ? """
+              <p style="color:#444444; font-size:16px; line-height:1.6;">
+                  A refund is owed for this order. Please submit your bank details so our team
+                  can process the transfer.
+              </p>
+              <div style="text-align:center; margin:20px 0;">
+                  <a href="%s"
+                     style="display:inline-block; padding:14px 28px; background-color:%s; color:#ffffff;
+                            text-decoration:none; border-radius:8px; font-weight:bold; font-size:15px;">
+                      Submit Bank Details
+                  </a>
+              </div>
+              """.formatted(refundLink, BRAND_COLOR)
+                : """
+              <p style="color:#444444; font-size:16px; line-height:1.6;">
+                  If a payment was made for this order, any applicable refund will be processed
+                  separately and you'll receive a confirmation once it's complete.
+              </p>
+              """;
+
+        String html = """
+        <!DOCTYPE html>
+        <html>
+        <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
+            <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
+                <h1 style="color:%s; text-align:center;">Order Cancelled</h1>
+
+                <p style="color:#444444; font-size:16px; line-height:1.6;">
+                    Dear %s,
+                </p>
+
+                <p style="color:#444444; font-size:16px; line-height:1.6;">
+                    Your order has been cancelled.
+                </p>
+
+                <p style="color:%s; font-weight:bold;">
+                    Order ID: #%s
+                </p>
+
+                %s
+
+                <p style="color:#444444; font-size:15px; line-height:1.6;">
+                    If this wasn't expected, please contact us.
+                </p>
+
+                <p style="font-size:14px; color:%s; text-align:center; margin-top:28px;">
+                    Blanche Bridal
+                </p>
+            </div>
+        </body>
+        </html>
+        """.formatted(
+                BRAND_COLOR,
+                escapeHtml(customerName),
+                BRAND_COLOR,
+                escapeHtml(displayId),   // short form for display
+                refundHtml,
+                BRAND_COLOR
+        );
+
+        sendHtmlEmail(toEmail, "Your order #" + displayId + " has been cancelled", html);
+    }
+
+    // NOTE: this is the ONLY sendRefundProcessedEmail method — the old
+    // 5-arg version (no proofImageUrl) was deleted. It's no longer part of
+    // the EmailService interface, and leaving it in with @Override would
+    // fail to compile ("does not override or implement a method from a
+    // supertype"). If anything else in the codebase still calls the 5-arg
+    // signature, that call site needs updating to pass proofImageUrl too.
+    @Async
+    @Override
+    public void sendRefundProcessedEmail(String toEmail,
+                                         String customerName,
+                                         String orderId,
+                                         BigDecimal amount,
+                                         String reason,
+                                         String proofImageUrl) {
+
+        String reasonHtml = (reason != null && !reason.isBlank())
+                ? """
+              <p style="color:#444444; font-size:15px; line-height:1.6;">
+                  <strong>Reason:</strong> %s
+              </p>
+              """.formatted(escapeHtml(reason))
+                : "";
+
+        // Receipt link only rendered when we actually have one — defensive,
+        // since RefundServiceImpl already requires proofImageUrl to create
+        // a Refund at all, so this should always be present in practice.
+        String receiptHtml = (proofImageUrl != null && !proofImageUrl.isBlank())
+                ? """
+              <div style="text-align:center; margin:20px 0;">
+                  <a href="%s"
+                     style="display:inline-block; padding:12px 24px; background-color:#ffffff; color:%s;
+                            text-decoration:none; border-radius:8px; font-weight:bold; font-size:14px;
+                            border:2px solid %s;">
+                      View Transfer Receipt
+                  </a>
+              </div>
+              """.formatted(proofImageUrl, BRAND_COLOR, BRAND_COLOR)
+                : "";
+
+        String html = """
+            <!DOCTYPE html>
+            <html>
+            <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
+                <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
+                    <h1 style="color:%s; text-align:center;">Refund Processed</h1>
+
+                    <p style="color:#444444; font-size:16px; line-height:1.6;">
+                        Dear %s,
+                    </p>
+
+                    <p style="color:#444444; font-size:16px; line-height:1.6;">
+                        A refund has been processed for your order via bank transfer.
+                    </p>
+
+                    <p style="color:%s; font-weight:bold;">
+                        Order ID: #%s
+                    </p>
+
+                    <p style="font-size:18px; color:#222222; font-weight:bold; margin-top:16px;">
+                        Refund amount: LKR %s
+                    </p>
+
+                    %s
+
+                    %s
+
+                    <p style="color:#444444; font-size:15px; line-height:1.6; margin-top:20px;">
+                        A copy of the transfer receipt is on file with our team — you can view it above,
+                        or find it any time on your order page. Please allow a few business days for the
+                        transfer to reflect in your account.
+                    </p>
+
+                    <p style="color:#444444; font-size:15px; line-height:1.6;">
+                        If you haven't received it or have any questions, please contact us.
+                    </p>
+
+                    <p style="font-size:14px; color:%s; text-align:center; margin-top:28px;">
+                        Blanche Bridal
+                    </p>
+                </div>
+            </body>
+            </html>
+            """.formatted(
+                BRAND_COLOR,
+                escapeHtml(customerName),
+                BRAND_COLOR,
+                escapeHtml(orderId),
+                amount,
+                reasonHtml,
+                receiptHtml,
+                BRAND_COLOR
+        );
+
+        sendHtmlEmail(toEmail, "Refund processed for order #" + orderId, html);
     }
 
     private void sendHtmlEmail(String toEmail, String subject, String html) {

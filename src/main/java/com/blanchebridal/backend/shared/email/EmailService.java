@@ -26,11 +26,11 @@ public interface EmailService {
                                           String productName);
 
     default void sendAppointmentConfirmationEmail(String toEmail,
-                                                   String customerName,
-                                                   LocalDate appointmentDate,
-                                                   String timeSlot,
-                                                   String appointmentType,
-                                                   String productName) {
+                                                  String customerName,
+                                                  LocalDate appointmentDate,
+                                                  String timeSlot,
+                                                  String appointmentType,
+                                                  String productName) {
         sendAppointmentConfirmationEmail(
                 toEmail,
                 customerName,
@@ -83,4 +83,36 @@ public interface EmailService {
                                        LocalDate appointmentDate,
                                        String timeSlot,
                                        String appointmentType);
+
+    /**
+     * Sent when an order transitions to READY — i.e. ready for the
+     * customer to collect (pickup) or ready to be shipped/delivered.
+     * fulfillmentMethod is passed through as a plain string (e.g. "PICKUP",
+     * "DELIVERY") so the template can vary the wording without EmailService
+     * depending on the order module's enum type.
+     */
+    void sendOrderReadyEmail(String toEmail,
+                             String customerName,
+                             String orderId,
+                             String fulfillmentMethod);
+
+    /**
+     * Sent when an order is cancelled, whether by the customer or by staff.
+     */
+    void sendOrderCancelledEmail(String toEmail, String customerName, String fullOrderId, boolean refundOwed);
+
+    /**
+     * Sent when a refund has been processed for an order. proofImageUrl is
+     * the admin-uploaded transfer receipt (Cloudinary URL) — linked in the
+     * email so "a copy is on file" is a real clickable reference, not just
+     * a claim in the text. Can be null/blank in theory (defensive only —
+     * RefundServiceImpl.createRefund already requires it to be non-blank
+     * before a Refund can be created at all).
+     */
+    void sendRefundProcessedEmail(String toEmail,
+                                  String customerName,
+                                  String orderId,
+                                  BigDecimal amount,
+                                  String reason,
+                                  String proofImageUrl);
 }
