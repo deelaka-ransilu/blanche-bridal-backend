@@ -1,5 +1,6 @@
 package com.blanchebridal.backend.rental.entity;
 
+import com.blanchebridal.backend.appointment.entity.Appointment;
 import com.blanchebridal.backend.order.entity.Order;
 import com.blanchebridal.backend.product.entity.Product;
 import com.blanchebridal.backend.user.entity.User;
@@ -73,4 +74,10 @@ public class Rental {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "appointment_id")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private Appointment appointment;
 }

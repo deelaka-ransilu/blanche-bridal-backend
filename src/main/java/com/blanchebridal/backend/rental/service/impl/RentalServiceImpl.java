@@ -1,5 +1,9 @@
 package com.blanchebridal.backend.rental.service.impl;
 
+import com.blanchebridal.backend.appointment.entity.Appointment;
+import com.blanchebridal.backend.appointment.entity.AppointmentStatus;
+import com.blanchebridal.backend.appointment.entity.AppointmentType;
+import com.blanchebridal.backend.appointment.repository.AppointmentRepository;
 import com.blanchebridal.backend.exception.ConflictException;
 import com.blanchebridal.backend.order.dto.res.OrderItemResponse;
 import com.blanchebridal.backend.order.dto.res.OrderResponse;
@@ -56,6 +60,7 @@ public class RentalServiceImpl implements RentalService {
     private final ProductRepository productRepository;
     private final OrderRepository orderRepository;
     private final EmailService emailService;
+    private final AppointmentRepository appointmentRepository;
 
 
 
@@ -138,6 +143,28 @@ public class RentalServiceImpl implements RentalService {
             rentalFee = product.getRentalPrice();
         }
 
+        // Pickup fitting slot — same slot pool as the standalone appointment
+        // booking flow (AppointmentServiceImpl.getAvailableSlots), locked to
+        // the rentalStart date. Race-condition guard, same pattern as
+        // AppointmentServiceImpl.bookAppointment().
+        boolean slotTaken = appointmentRepository.existsByAppointmentDateAndTimeSlotAndStatusNot(
+                req.getRentalStart(), req.getTimeSlot(), AppointmentStatus.CANCELLED);
+        if (slotTaken) {
+            throw new IllegalStateException(
+                    "Pickup slot " + req.getTimeSlot() + " on " + req.getRentalStart()
+                            + " is no longer available");
+        }
+
+        Appointment pickupAppointment = Appointment.builder()
+                .user(user)
+                .product(product)
+                .appointmentDate(req.getRentalStart())
+                .timeSlot(req.getTimeSlot())
+                .type(AppointmentType.RENTAL_PICKUP)
+                .notes("Auto-created for rental booking")
+                .build();
+        Appointment savedAppointment = appointmentRepository.save(pickupAppointment);
+
         String imageUrl = (product.getImages() != null && !product.getImages().isEmpty())
                 ? product.getImages().get(0).getUrl()
                 : null;
@@ -169,6 +196,7 @@ public class RentalServiceImpl implements RentalService {
                 .user(user)
                 .product(product)
                 .order(savedOrder)
+                .appointment(savedAppointment)
                 .rentalStart(req.getRentalStart())
                 .rentalEnd(req.getRentalEnd())
                 .depositAmount(rentalFee)
@@ -177,8 +205,8 @@ public class RentalServiceImpl implements RentalService {
 
         Rental savedRental = rentalRepository.save(rental);
 
-        log.info("[Rental] Customer {} booked rental for product {} — synthetic order {} created, {} days, rental fee LKR {} (cash, due at pickup)",
-                callerId, req.getProductId(), savedOrder.getId(), days, rentalFee);
+        log.info("[Rental] Customer {} booked rental for product {} — synthetic order {} created, {} days, rental fee LKR {} (cash, due at pickup), pickup slot {} on {}",
+                callerId, req.getProductId(), savedOrder.getId(), days, rentalFee, req.getTimeSlot(), req.getRentalStart());
 
         return toResponse(savedRental);
     }

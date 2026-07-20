@@ -13,6 +13,7 @@ spring:
   flyway:
     enabled: true
     repair: true
+    validate-migration-naming: false
 
   mail:
     host: smtp.gmail.com

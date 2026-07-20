@@ -18,6 +18,9 @@ public class RentalBookingRequest {
     @NotNull(message = "Rental end date is required")
     private LocalDate rentalEnd;
 
+    @NotNull(message = "Pickup time slot is required")
+    private String timeSlot;
+
     // paymentMethod removed — rentals are cash-only now (decided this session).
     // PaymentServiceImpl.confirmCashPayment() is still used by admin to mark
     // the linked synthetic order paid; PayHere/card are never used for rentals.
