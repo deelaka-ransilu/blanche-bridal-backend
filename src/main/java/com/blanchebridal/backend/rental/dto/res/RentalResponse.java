@@ -1,5 +1,6 @@
 package com.blanchebridal.backend.rental.dto.res;
 
+import com.blanchebridal.backend.payment.entity.PaymentMethod;
 import com.blanchebridal.backend.rental.entity.RentalStatus;
 import lombok.Builder;
 import lombok.Data;
@@ -23,6 +24,11 @@ public class RentalResponse {
 
     private UUID orderId;          // fitting (first) payment order
     private UUID handoverOrderId;  // handover (second) payment order
+
+    // Payment method on the fitting (first) order — CASH or PAYHERE.
+    // Needed by the customer detail page to show the right "how to pay"
+    // messaging instead of a PayHere-only default.
+    private PaymentMethod paymentMethod;
 
     private LocalDate rentalStart;
     private LocalDate rentalEnd;
