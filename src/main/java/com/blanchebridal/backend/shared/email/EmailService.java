@@ -119,4 +119,9 @@ public interface EmailService {
                                  java.math.BigDecimal lateFeeAmount,
                                  java.math.BigDecimal securityDepositRefundedAmount,
                                  java.math.BigDecimal amountOwedByCustomer);
+
+    void sendCustomQuoteEmail(String toEmail,
+                              String customerName,
+                              UUID customDesignRequestId,
+                              com.blanchebridal.backend.order.dto.res.CustomQuoteResponse quote);
 }

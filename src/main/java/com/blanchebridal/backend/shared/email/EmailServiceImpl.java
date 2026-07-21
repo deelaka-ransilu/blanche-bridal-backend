@@ -1,5 +1,6 @@
 package com.blanchebridal.backend.shared.email;
 
+import com.blanchebridal.backend.order.dto.res.CustomQuoteResponse;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
@@ -1088,6 +1089,105 @@ public class EmailServiceImpl implements EmailService {
         );
 
         sendHtmlEmail(toEmail, "Your rental return — " + escapeHtml(productName), html);
+    }
+
+    @Async
+    @Override
+    public void sendCustomQuoteEmail(String toEmail,
+                                     String customerName,
+                                     UUID customDesignRequestId,
+                                     com.blanchebridal.backend.order.dto.res.CustomQuoteResponse quote) {
+
+        String viewLink = frontendUrl + "/my/custom-design/" + customDesignRequestId;
+        String validUntilStr = quote.validUntil().format(DateTimeFormatter.ofPattern("d MMMM yyyy, h:mm a"));
+
+        String html = """
+            <!DOCTYPE html>
+            <html>
+            <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
+                <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
+                    <h1 style="color:%s; text-align:center;">Your Custom Order Quote</h1>
+
+                    <p style="color:#444444; font-size:16px; line-height:1.6;">
+                        Dear %s,
+                    </p>
+
+                    <p style="color:#444444; font-size:16px; line-height:1.6;">
+                        Here's the quote (version %d) for your custom design:
+                    </p>
+
+                    <table style="width:100%%; border-collapse:collapse; margin-top:15px;">
+                        <tr>
+                            <td style="padding:8px 0; border-bottom:1px solid #eeeeee; color:#444444;">Fabric &amp; materials</td>
+                            <td style="padding:8px 0; border-bottom:1px solid #eeeeee; text-align:right; color:#444444;">LKR %s</td>
+                        </tr>
+                        <tr>
+                            <td style="padding:8px 0; border-bottom:1px solid #eeeeee; color:#444444;">Stitching &amp; tailoring labor</td>
+                            <td style="padding:8px 0; border-bottom:1px solid #eeeeee; text-align:right; color:#444444;">LKR %s</td>
+                        </tr>
+                        <tr>
+                            <td style="padding:8px 0; border-bottom:1px solid #eeeeee; color:#444444;">Embellishments &amp; detailing</td>
+                            <td style="padding:8px 0; border-bottom:1px solid #eeeeee; text-align:right; color:#444444;">LKR %s</td>
+                        </tr>
+                        <tr>
+                            <td style="padding:8px 0; border-bottom:1px solid #eeeeee; color:#444444;">Alterations &amp; fitting</td>
+                            <td style="padding:8px 0; border-bottom:1px solid #eeeeee; text-align:right; color:#444444;">LKR %s</td>
+                        </tr>
+                        %s
+                    </table>
+
+                    <p style="font-size:18px; color:#222222; font-weight:bold; margin-top:20px;">
+                        Total: LKR %s
+                    </p>
+
+                    <p style="color:#444444; font-size:15px; line-height:1.6;">
+                        Payment: %s
+                    </p>
+
+                    <p style="color:#b05e00; font-size:14px; line-height:1.6;">
+                        ⚠ This quote is valid until %s. Please review and respond before then.
+                    </p>
+
+                    <div style="text-align:center; margin-top:24px;">
+                        <a href="%s"
+                           style="display:inline-block; padding:14px 28px; background-color:%s; color:#ffffff; text-decoration:none; border-radius:8px; font-weight:bold;">
+                            View & Respond to Quote
+                        </a>
+                    </div>
+
+                    <p style="font-size:14px; color:%s; text-align:center; margin-top:28px;">
+                        Blanche Bridal
+                    </p>
+                </div>
+            </body>
+            </html>
+            """.formatted(
+                BRAND_COLOR,
+                escapeHtml(customerName),
+                quote.version(),
+                quote.fabricAmount(),
+                quote.laborAmount(),
+                quote.embellishmentAmount(),
+                quote.alterationsAmount(),
+                quote.otherAmount().compareTo(BigDecimal.ZERO) > 0
+                        ? """
+                      <tr>
+                          <td style="padding:8px 0; color:#444444;">Other (%s)</td>
+                          <td style="padding:8px 0; text-align:right; color:#444444;">LKR %s</td>
+                      </tr>
+                      """.formatted(escapeHtml(quote.otherNote()), quote.otherAmount())
+                        : "",
+                quote.totalAmount(),
+                quote.splitType() == com.blanchebridal.backend.order.entity.SplitType.FULL_UPFRONT
+                        ? "Full amount upfront"
+                        : "50% now, 50% at pickup",
+                validUntilStr,
+                viewLink,
+                BRAND_COLOR,
+                BRAND_COLOR
+        );
+
+        sendHtmlEmail(toEmail, "Your Blanche Bridal custom order quote is ready", html);
     }
 
     private void sendHtmlEmail(String toEmail, String subject, String html) {
