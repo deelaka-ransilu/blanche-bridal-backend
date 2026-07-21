@@ -20,13 +20,31 @@ public class RentalResponse {
     private UUID userId;
     private String customerName;
     private String customerEmail;
-    private UUID orderId;
+
+    private UUID orderId;          // fitting (first) payment order
+    private UUID handoverOrderId;  // handover (second) payment order
+
     private LocalDate rentalStart;
     private LocalDate rentalEnd;
     private LocalDate returnDate;
     private RentalStatus status;
-    private BigDecimal depositAmount;
+
+    private BigDecimal rentalFee;
+    private BigDecimal securityDepositAmount;
+    private BigDecimal securityDepositRefundedAmount;
+    private BigDecimal damageCost;
+    private BigDecimal lateFeeAmount;
+    private BigDecimal amountOwedByCustomer;
+    private LocalDateTime handoverConfirmedAt;
+
+    private BigDecimal depositAmount; // legacy field, kept for old rows
     private BigDecimal balanceDue;
     private String notes;
     private LocalDateTime createdAt;
+
+    // Fitting appointment fields — renamed from appointmentDate/TimeSlot/Id
+    // for clarity now that this is unambiguously the fitting, not a pickup.
+    private LocalDate fittingDate;
+    private String fittingTimeSlot;
+    private UUID fittingAppointmentId;
 }

@@ -30,7 +30,6 @@ public class RentalController {
     private final RentalService rentalService;
     private final JwtUtil jwtUtil;
 
-    // ADMIN + EMPLOYEE — all rentals, optional status filter
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> getAllRentals(
@@ -54,7 +53,6 @@ public class RentalController {
         ));
     }
 
-    // CUSTOMER — own rentals only
     @GetMapping("/my")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<Map<String, Object>> getMyRentals(
@@ -67,7 +65,6 @@ public class RentalController {
         ));
     }
 
-    // CUSTOMER (own) + ADMIN + EMPLOYEE
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> getRentalById(
@@ -82,10 +79,6 @@ public class RentalController {
         ));
     }
 
-    // ADMIN + EMPLOYEE — create rental on behalf of customer (manual
-    // data-entry style: sets status directly, no synthetic-order/payment
-    // integration). Kept as-is — distinct from the walk-in booking endpoint
-    // below, which is what WalkInSalePanel actually calls.
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> createRental(
@@ -100,7 +93,6 @@ public class RentalController {
         ));
     }
 
-    // CUSTOMER (own) — cancel a rental booking before it's active
     @PostMapping("/{id}/cancel")
     @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> cancelRental(
@@ -117,7 +109,8 @@ public class RentalController {
         ));
     }
 
-    // CUSTOMER — self-service rental booking (Step 4b)
+    // CUSTOMER — self-service rental booking. Now books the FITTING
+    // appointment (not pickup) and pays 50% of the rental fee at booking.
     @PostMapping("/book")
     @PreAuthorize("hasRole('CUSTOMER')")
     public ResponseEntity<Map<String, Object>> bookRental(
@@ -126,9 +119,9 @@ public class RentalController {
 
         UUID userId = extractUserId(authHeader);
 
-        log.info("[Rental] Booking request — customer: {}, product: {}, start: {}, end: {}",
+        log.info("[Rental] Booking request — customer: {}, product: {}, start: {}, end: {}, fitting: {} {}",
                 userId, request.getProductId(), request.getRentalStart(),
-                request.getRentalEnd());
+                request.getRentalEnd(), request.getFittingDate(), request.getFittingTimeSlot());
 
         return ResponseEntity.ok(Map.of(
                 "success", true,
@@ -136,22 +129,40 @@ public class RentalController {
         ));
     }
 
-    // ADMIN + EMPLOYEE — mark as returned
+    // ADMIN + EMPLOYEE — confirm handover at pickup: creates the second
+    // payment (remaining 50% rental fee + security deposit).
+    @PostMapping("/{id}/handover")
+    @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
+    public ResponseEntity<Map<String, Object>> confirmHandover(
+            @PathVariable UUID id,
+            @Valid @RequestBody HandoverRequest request,
+            @RequestHeader("Authorization") String authHeader) {
+
+        UUID callerId = extractUserId(authHeader);
+        String role = extractRole();
+
+        log.info("[Rental] Handover confirmation request — rental: {}, caller: {}", id, callerId);
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "data", rentalService.confirmHandover(id, request, callerId, role)
+        ));
+    }
+
+    // ADMIN + EMPLOYEE — mark as returned, now with damage/late-fee inputs
     @PutMapping("/{id}/return")
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> markReturned(
             @PathVariable UUID id,
             @Valid @RequestBody MarkReturnedRequest request) {
 
-        log.info("[Rental] Mark returned — rental: {}, return date: {}",
-                id, request.getReturnDate());
+        log.info("[Rental] Mark returned — rental: {}, return date: {}, damaged: {}",
+                id, request.getReturnDate(), request.isDamaged());
         return ResponseEntity.ok(Map.of(
                 "success", true,
-                "data", rentalService.markReturned(id, request.getReturnDate())
+                "data", rentalService.markReturned(id, request)
         ));
     }
 
-    // ADMIN only — update balance due
     @PutMapping("/{id}/balance")
     @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> updateBalance(
@@ -166,8 +177,6 @@ public class RentalController {
         ));
     }
 
-    // ADMIN + EMPLOYEE — rentable dresses (type=DRESS, available, active,
-    // not currently booked) for WalkInSalePanel's select-gown step.
     @GetMapping("/rentable-products")
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> getRentableProducts() {
@@ -177,13 +186,6 @@ public class RentalController {
         ));
     }
 
-    // ADMIN + EMPLOYEE — walk-in rental booking (WalkInSalePanel). Separate
-    // path from the bare POST /api/rentals above: this one builds a real
-    // synthetic Order (isRentalDeposit=true, PENDING) that plugs into the
-    // existing cash/PayHere payment-confirmation flow — PaymentServiceImpl's
-    // handleRentalDepositConfirmed() flips this Rental PENDING_PAYMENT ->
-    // BOOKED once that order's payment completes. createRental() above does
-    // not do any of that — it's a separate, more direct admin tool.
     @PostMapping("/walk-in")
     @PreAuthorize("hasAnyRole('ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> createRentalBooking(

@@ -14,6 +14,7 @@ import com.blanchebridal.backend.payment.repository.PaymentRepository;
 import com.blanchebridal.backend.payment.service.PaymentService;
 import com.blanchebridal.backend.payment.service.ReceiptService;
 import com.blanchebridal.backend.payment.util.PayHereUtil;
+import com.blanchebridal.backend.rental.entity.Rental;
 import com.blanchebridal.backend.rental.entity.RentalStatus;
 import com.blanchebridal.backend.rental.repository.RentalRepository;
 import com.blanchebridal.backend.shared.email.EmailService;
@@ -164,16 +165,8 @@ public class PaymentServiceImpl implements PaymentService {
             sendOrderConfirmationEmailSafely(order);
 
             if (Boolean.TRUE.equals(order.getIsRentalDeposit())) {
-                handleRentalDepositConfirmed(order);
+                handleRentalPaymentConfirmed(order);
             }
-            // NOTE: stock is NOT touched here. OrderServiceImpl.createOrder
-            // already reserves (decrements) stock at order creation time,
-            // under a pessimistic lock, so the order can never oversell
-            // between creation and confirmation. Decrementing again on
-            // payment confirmation would double-count every purchase order.
-            // If the order is later cancelled or expires while still
-            // PENDING, OrderServiceImpl.restoreStock() gives the reservation
-            // back — that's the single release path for reserved stock.
 
             receiptService.generateReceipt(order, payment);
 
@@ -220,19 +213,14 @@ public class PaymentServiceImpl implements PaymentService {
         sendOrderConfirmationEmailSafely(order);
 
         if (Boolean.TRUE.equals(order.getIsRentalDeposit())) {
-            handleRentalDepositConfirmed(order);
+            handleRentalPaymentConfirmed(order);
         }
-        // NOTE: stock is NOT touched here — see the matching note in
-        // handleWebhook(). createOrder() already reserved this order's stock
-        // at creation time; confirming payment (cash or PayHere) must not
-        // decrement it again.
 
         receiptService.generateReceipt(order, payment);
 
         return PaymentStatusResponse.builder().status(PaymentStatus.COMPLETED.name()).build();
     }
 
-    // PaymentServiceImpl.java / PaymentService.java
     @Override
     @Transactional(readOnly = true)
     public PaymentStatusResponse getPaymentStatus(UUID orderId, UUID userId, String role) {
@@ -255,40 +243,65 @@ public class PaymentServiceImpl implements PaymentService {
                         .build());
     }
 
-    // ─── Rental-deposit hook ────────────────────────────────────────────────
+    // ─── Rental-payment hook ────────────────────────────────────────────────
 
     /**
      * Called from handleWebhook() and confirmCashPayment() when the confirmed
-     * order is a synthetic rental-deposit order (Order.isRentalDeposit = true).
-     * Flips the linked Rental from PENDING_PAYMENT -> BOOKED. Does NOT touch
-     * Product.stock — rentals don't deduct stock (STEP_4B_RESCOPE.md decision #4).
-     * BOOKED -> ACTIVE is scheduler-driven on rentalStart, not done here.
+     * order is a synthetic rental order (Order.isRentalDeposit = true).
+     * Dispatches to the fitting-payment or handover-payment handler depending
+     * on which of the rental's two order slots this order fills — a rental
+     * now has TWO synthetic orders (fitting 50% + handover 50%+deposit), so
+     * this can no longer assume it's always the first one.
      */
-    private void handleRentalDepositConfirmed(Order order) {
-        rentalRepository.findByOrder_Id(order.getId()).ifPresentOrElse(rental -> {
-            if (rental.getStatus() != RentalStatus.PENDING_PAYMENT) {
-                log.info("[Rental] Order {} confirmed but linked rental {} already in status {} — skipping transition.",
-                        order.getId(), rental.getId(), rental.getStatus());
-                return;
-            }
-            rental.setStatus(RentalStatus.BOOKED);
-            rentalRepository.save(rental);
-            log.info("[Rental] Rental {} for order {} transitioned PENDING_PAYMENT -> BOOKED.",
-                    rental.getId(), order.getId());
-        }, () -> log.warn("[Rental] Order {} flagged isRentalDeposit=true but no linked Rental found.",
-                order.getId()));
+    private void handleRentalPaymentConfirmed(Order order) {
+        rentalRepository.findByOrder_Id(order.getId()).ifPresentOrElse(
+                this::handleFittingPaymentConfirmed,
+                () -> rentalRepository.findByHandoverOrder_Id(order.getId()).ifPresentOrElse(
+                        this::handleHandoverPaymentConfirmed,
+                        () -> log.warn("[Rental] Order {} flagged isRentalDeposit=true but matches "
+                                + "neither a rental's fitting order nor handover order.", order.getId())
+                )
+        );
+    }
+
+    /**
+     * First payment (50% rental fee, paid at fitting-booking time) confirmed.
+     * Flips PENDING_PAYMENT -> BOOKED. Does not touch Product.stock — rentals
+     * don't deduct stock.
+     */
+    private void handleFittingPaymentConfirmed(Rental rental) {
+        if (rental.getStatus() != RentalStatus.PENDING_PAYMENT) {
+            log.info("[Rental] Fitting payment confirmed for rental {} but it's already in status {} — skipping.",
+                    rental.getId(), rental.getStatus());
+            return;
+        }
+        rental.setStatus(RentalStatus.BOOKED);
+        rentalRepository.save(rental);
+        log.info("[Rental] Rental {} transitioned PENDING_PAYMENT -> BOOKED (fitting payment confirmed).",
+                rental.getId());
+    }
+
+    /**
+     * Second payment (remaining 50% + security deposit, paid at handover)
+     * confirmed. Marks handoverConfirmedAt and activates the rental
+     * immediately — handover only happens at/after rentalStart, so there's no
+     * need to wait for the scheduler's date-based activation.
+     */
+    private void handleHandoverPaymentConfirmed(Rental rental) {
+        if (rental.getStatus() != RentalStatus.BOOKED) {
+            log.info("[Rental] Handover payment confirmed for rental {} but it's in status {}, not BOOKED — skipping.",
+                    rental.getId(), rental.getStatus());
+            return;
+        }
+        rental.setHandoverConfirmedAt(LocalDateTime.now());
+        rental.setStatus(RentalStatus.ACTIVE);
+        rentalRepository.save(rental);
+        log.info("[Rental] Rental {} transitioned BOOKED -> ACTIVE (handover payment confirmed, dress handed over).",
+                rental.getId());
     }
 
     // ─── Order-confirmation email hook ─────────────────────────────────────
 
-    /**
-     * Sends the order-confirmation email to the customer once payment is
-     * confirmed (PayHere webhook success or cash confirmation).
-     * Wrapped in try/catch so an email failure (SMTP down, bad address,
-     * etc.) never breaks payment confirmation — this is called from the
-     * PayHere webhook path too, which MUST always return 200 regardless of
-     * what happens downstream.
-     */
     private void sendOrderConfirmationEmailSafely(Order order) {
         try {
             User user = order.getUser();

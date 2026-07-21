@@ -3,6 +3,8 @@ package com.blanchebridal.backend.rental.service;
 import com.blanchebridal.backend.order.dto.res.OrderResponse;
 import com.blanchebridal.backend.rental.dto.req.CreateRentalBookingRequest;
 import com.blanchebridal.backend.rental.dto.req.CreateRentalRequest;
+import com.blanchebridal.backend.rental.dto.req.HandoverRequest;
+import com.blanchebridal.backend.rental.dto.req.MarkReturnedRequest;
 import com.blanchebridal.backend.rental.dto.req.RentalBookingRequest;
 import com.blanchebridal.backend.rental.dto.req.UpdateBalanceRequest;
 import com.blanchebridal.backend.rental.dto.res.RentableProductResponse;
@@ -11,7 +13,6 @@ import com.blanchebridal.backend.rental.entity.RentalStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
-import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,18 +28,22 @@ public interface RentalService {
 
     RentalResponse getRentalById(UUID id, UUID requestingUserId, String role);
 
-    RentalResponse markReturned(UUID id, LocalDate returnDate);
+    // Replaces the old direct markReturned(id, date) — now takes the full
+    // request so damage/damageCost flow through to the refund calculation.
+    RentalResponse markReturned(UUID id, MarkReturnedRequest req);
 
     RentalResponse updateBalance(UUID id, UpdateBalanceRequest req);
 
     RentalResponse cancelRental(UUID id, UUID userId, String role);
 
+    // ADMIN/EMPLOYEE — confirms handover at pickup: creates the second
+    // synthetic order (remaining 50% rental fee + security deposit).
+    RentalResponse confirmHandover(UUID id, HandoverRequest req, UUID callerId, String role);
+
     void markOverdueRentals();
 
     void markActiveRentals();
 
-    // New: cancels PENDING_PAYMENT rentals (and their synthetic order) once
-    // 48h have passed since the requested pickup date with no cash paid.
     void expireStaleBookings();
 
     List<RentableProductResponse> getRentableProducts();

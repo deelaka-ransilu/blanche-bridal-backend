@@ -17,16 +17,18 @@ public interface RentalRepository extends JpaRepository<Rental, UUID> {
 
     Page<Rental> findByStatus(RentalStatus status, Pageable pageable);
 
-    // Used by overdue detection: ACTIVE rentals whose end date has passed
     List<Rental> findByStatusAndRentalEndBefore(RentalStatus status, LocalDate date);
 
-    // Used to block booking a product that is currently out on rental
     boolean existsByProduct_IdAndStatusIn(UUID productId, List<RentalStatus> statuses);
 
-    // Used by PaymentServiceImpl to find the Rental linked to a synthetic
-    // rental-deposit Order, so payment confirmation can flip its status
+    // First (fitting) payment order lookup — used by PaymentServiceImpl to
+    // flip PENDING_PAYMENT -> BOOKED once the 50% fitting payment completes.
     Optional<Rental> findByOrder_Id(UUID orderId);
 
-    // Used by activation detection: BOOKED rentals whose start date has arrived
+    // Second (handover) payment order lookup — used by PaymentServiceImpl to
+    // confirm handover (remaining 50% + security deposit) and set the rental
+    // ACTIVE.
+    Optional<Rental> findByHandoverOrder_Id(UUID orderId);
+
     List<Rental> findByStatusAndRentalStartLessThanEqual(RentalStatus status, LocalDate date);
 }
