@@ -200,6 +200,19 @@ public class RentalController {
                 "data", rentalService.createRentalBooking(request, callerId, role)));
     }
 
+    @PutMapping("/{id}/notes")
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    public ResponseEntity<Map<String, Object>> updateNotes(
+            @PathVariable UUID id,
+            @Valid @RequestBody UpdateRentalNotesRequest request) {
+
+        log.info("[Rental] Notes update — rental: {}", id);
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "data", rentalService.updateNotes(id, request)
+        ));
+    }
+
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private UUID extractUserId(String authHeader) {

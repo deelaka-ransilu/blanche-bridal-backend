@@ -10,9 +10,7 @@ import com.blanchebridal.backend.order.dto.res.OrderResponse;
 import com.blanchebridal.backend.order.repository.OrderRepository;
 import com.blanchebridal.backend.payment.entity.PaymentMethod;
 import com.blanchebridal.backend.product.entity.ProductType;
-import com.blanchebridal.backend.rental.dto.req.CreateRentalBookingRequest;
-import com.blanchebridal.backend.rental.dto.req.HandoverRequest;
-import com.blanchebridal.backend.rental.dto.req.MarkReturnedRequest;
+import com.blanchebridal.backend.rental.dto.req.*;
 import com.blanchebridal.backend.rental.dto.res.RentableProductResponse;
 import com.blanchebridal.backend.shared.email.EmailService;
 import com.blanchebridal.backend.exception.ResourceNotFoundException;
@@ -23,9 +21,6 @@ import com.blanchebridal.backend.order.entity.OrderMode;
 import com.blanchebridal.backend.order.entity.OrderStatus;
 import com.blanchebridal.backend.product.entity.Product;
 import com.blanchebridal.backend.product.repository.ProductRepository;
-import com.blanchebridal.backend.rental.dto.req.CreateRentalRequest;
-import com.blanchebridal.backend.rental.dto.req.RentalBookingRequest;
-import com.blanchebridal.backend.rental.dto.req.UpdateBalanceRequest;
 import com.blanchebridal.backend.rental.dto.res.RentalResponse;
 import com.blanchebridal.backend.rental.entity.Rental;
 import com.blanchebridal.backend.rental.entity.RentalStatus;
@@ -266,10 +261,14 @@ public class RentalServiceImpl implements RentalService {
             throw new ConflictException("Handover payment has already been created for this rental");
         }
 
+        BigDecimal securityDeposit = rental.getSecurityDepositAmount() != null
+                ? rental.getSecurityDepositAmount()
+                : BigDecimal.ZERO;
+
         BigDecimal remainingInstallment = rental.getRentalFee()
                 .multiply(INSTALLMENT_RATE).setScale(2, RoundingMode.HALF_UP);
         BigDecimal handoverTotal = remainingInstallment
-                .add(rental.getSecurityDepositAmount())
+                .add(securityDeposit)
                 .setScale(2, RoundingMode.HALF_UP);
 
         Product product = rental.getProduct();
@@ -368,7 +367,6 @@ public class RentalServiceImpl implements RentalService {
         BigDecimal lateFee = BigDecimal.ZERO;
         if (daysLate > 0) {
             BigDecimal rawLateFee = LATE_FEE_PER_DAY.multiply(BigDecimal.valueOf(daysLate));
-            // Capped at the security deposit amount.
             lateFee = rawLateFee.min(deposit).setScale(2, RoundingMode.HALF_UP);
         }
 
@@ -393,7 +391,31 @@ public class RentalServiceImpl implements RentalService {
                         + "deposit refunded LKR {}, amount owed by customer LKR {}",
                 id, req.getReturnDate(), daysLate, damageCost, lateFee, refundedAmount, owedAmount);
 
-        return toResponse(rentalRepository.save(rental));
+        Rental saved = rentalRepository.save(rental);
+
+        // Email the return summary — best-effort, never let a mail failure roll
+        // back the return itself. Same try/catch convention as OrderServiceImpl's
+        // sendConfirmationEmailSafely / sendCancelledEmailSafely.
+        try {
+            User customer = rental.getUser();
+            Product product = rental.getProduct();
+            if (customer != null && customer.getEmail() != null && product != null) {
+                emailService.sendRentalReturnedEmail(
+                        customer.getEmail(),
+                        customer.getFirstName() + " " + customer.getLastName(),
+                        product.getName(),
+                        req.getReturnDate(),
+                        damageCost,
+                        lateFee,
+                        refundedAmount,
+                        owedAmount
+                );
+            }
+        } catch (Exception e) {
+            log.warn("Failed to send rental-returned email for rental {}: {}", id, e.getMessage());
+        }
+
+        return toResponse(saved);
     }
 
     @Override
@@ -601,6 +623,9 @@ public class RentalServiceImpl implements RentalService {
         } else {
             fee = product.getRentalPrice() != null ? product.getRentalPrice() : BigDecimal.ZERO;
         }
+        fee = fee.setScale(2, RoundingMode.HALF_UP);
+
+        BigDecimal securityDeposit = fee.multiply(SECURITY_DEPOSIT_RATE).setScale(2, RoundingMode.HALF_UP);
 
         String imageUrl = (product.getImages() != null && !product.getImages().isEmpty())
                 ? product.getImages().get(0).getUrl()
@@ -638,6 +663,7 @@ public class RentalServiceImpl implements RentalService {
                 .rentalEnd(req.getRentalEnd())
                 .status(RentalStatus.PENDING_PAYMENT)
                 .rentalFee(fee)
+                .securityDepositAmount(securityDeposit)
                 .depositAmount(fee)
                 .balanceDue(BigDecimal.ZERO)
                 .notes(req.getNotes())
@@ -649,6 +675,16 @@ public class RentalServiceImpl implements RentalService {
                 savedOrder.getId(), product.getId(), customer.getId(), callerId, fee);
 
         return toResponse(savedOrder);
+    }
+
+    @Override
+    @Transactional
+    public RentalResponse updateNotes(UUID id, UpdateRentalNotesRequest req) {
+        Rental rental = rentalRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Rental not found: " + id));
+
+        rental.setNotes(req.getNotes());
+        return toResponse(rentalRepository.save(rental));
     }
 
     // ─── Mapper ───────────────────────────────────────────────────────────────

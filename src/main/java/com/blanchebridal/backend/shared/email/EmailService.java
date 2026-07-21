@@ -115,4 +115,13 @@ public interface EmailService {
                                   BigDecimal amount,
                                   String reason,
                                   String proofImageUrl);
+
+    void sendRentalReturnedEmail(String toEmail,
+                                 String customerName,
+                                 String productName,
+                                 java.time.LocalDate returnDate,
+                                 java.math.BigDecimal damageCost,
+                                 java.math.BigDecimal lateFeeAmount,
+                                 java.math.BigDecimal securityDepositRefundedAmount,
+                                 java.math.BigDecimal amountOwedByCustomer);
 }

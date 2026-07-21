@@ -952,6 +952,125 @@ public class EmailServiceImpl implements EmailService {
         sendHtmlEmail(toEmail, "Refund processed for order #" + orderId, html);
     }
 
+    @Async
+    @Override
+    public void sendRentalReturnedEmail(String toEmail,
+                                        String customerName,
+                                        String productName,
+                                        LocalDate returnDate,
+                                        BigDecimal damageCost,
+                                        BigDecimal lateFeeAmount,
+                                        BigDecimal securityDepositRefundedAmount,
+                                        BigDecimal amountOwedByCustomer) {
+
+        String dateStr = returnDate.format(DATE_FORMAT);
+
+        boolean hasDamage = damageCost != null && damageCost.compareTo(BigDecimal.ZERO) > 0;
+        boolean hasLateFee = lateFeeAmount != null && lateFeeAmount.compareTo(BigDecimal.ZERO) > 0;
+        boolean owesMore = amountOwedByCustomer != null && amountOwedByCustomer.compareTo(BigDecimal.ZERO) > 0;
+
+        StringBuilder rows = new StringBuilder();
+
+        if (hasDamage) {
+            rows.append("""
+                    <p style="color:#444444; font-size:15px; margin:0 0 8px 0;">
+                        <strong>Damage cost:</strong> LKR %s
+                    </p>
+                    """.formatted(damageCost));
+        }
+
+        if (hasLateFee) {
+            rows.append("""
+                    <p style="color:#444444; font-size:15px; margin:0 0 8px 0;">
+                        <strong>Late return fee:</strong> LKR %s
+                    </p>
+                    """.formatted(lateFeeAmount));
+        }
+
+        if (securityDepositRefundedAmount != null) {
+            rows.append("""
+                    <p style="color:#444444; font-size:15px; margin:0 0 8px 0;">
+                        <strong>Security deposit refunded:</strong> LKR %s
+                    </p>
+                    """.formatted(securityDepositRefundedAmount));
+        }
+
+        String owedHtml = owesMore
+                ? """
+                  <p style="font-size:17px; color:%s; font-weight:bold; margin-top:16px;">
+                      Amount still owed: LKR %s
+                  </p>
+                  <p style="color:#444444; font-size:15px; line-height:1.6;">
+                      This exceeds your security deposit — please contact us to settle the
+                      remaining balance.
+                  </p>
+                  """.formatted(BRAND_COLOR, amountOwedByCustomer)
+                : "";
+
+        String headline = (hasDamage || hasLateFee)
+                ? "Your Rental Return — Summary"
+                : "Your Rental Has Been Returned";
+
+        String intro = (hasDamage || hasLateFee)
+                ? "We've processed the return of your rental. Here's a summary of the deposit settlement:"
+                : "We've processed the return of your rental. Your security deposit has been refunded in full.";
+
+        String html = """
+                <!DOCTYPE html>
+                <html>
+                <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
+                    <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
+                        <h1 style="color:%s; text-align:center;">%s</h1>
+
+                        <p style="color:#444444; font-size:16px; line-height:1.6;">
+                            Dear %s,
+                        </p>
+
+                        <p style="color:#444444; font-size:16px; line-height:1.6;">
+                            %s
+                        </p>
+
+                        <p style="color:%s; font-weight:bold;">
+                            Item: %s
+                        </p>
+                        <p style="color:#444444; font-size:15px; margin-top:-8px;">
+                            Returned on %s
+                        </p>
+
+                        <div style="background-color:#f8f3f0; padding:18px; border-radius:10px; margin:20px 0;">
+                            %s
+                        </div>
+
+                        %s
+
+                        <p style="color:#444444; font-size:15px; line-height:1.6; margin-top:20px;">
+                            Thank you for renting with Blanche Bridal — we hope you had a wonderful occasion.
+                        </p>
+
+                        <p style="font-size:14px; color:%s; text-align:center; margin-top:28px;">
+                            Blanche Bridal
+                        </p>
+                    </div>
+                </body>
+                </html>
+                """.formatted(
+                BRAND_COLOR,
+                headline,
+                escapeHtml(customerName),
+                intro,
+                BRAND_COLOR,
+                escapeHtml(productName),
+                escapeHtml(dateStr),
+                rows.length() > 0 ? rows.toString() : """
+                        <p style="color:#444444; font-size:15px; margin:0;">No damage or late fees applied.</p>
+                        """,
+                owedHtml,
+                BRAND_COLOR
+        );
+
+        sendHtmlEmail(toEmail, "Your rental return — " + escapeHtml(productName), html);
+    }
+
     private void sendHtmlEmail(String toEmail, String subject, String html) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
