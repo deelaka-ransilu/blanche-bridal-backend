@@ -3,6 +3,7 @@ package com.blanchebridal.backend.appointment.service;
 import com.blanchebridal.backend.appointment.dto.req.CreateAppointmentRequest;
 import com.blanchebridal.backend.appointment.dto.req.RescheduleAppointmentRequest;
 import com.blanchebridal.backend.appointment.dto.res.AppointmentResponse;
+import com.blanchebridal.backend.appointment.dto.res.CustomDesignRequestResponse;
 import com.blanchebridal.backend.appointment.entity.AppointmentStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,4 +23,6 @@ public interface AppointmentService {
     Page<AppointmentResponse> getAllAppointments(AppointmentStatus status, Pageable pageable);
     Page<AppointmentResponse> getMyAppointments(UUID userId, Pageable pageable);
     AppointmentResponse getAppointmentById(UUID id, UUID requestingUserId, String role);
+    CustomDesignRequestResponse getCustomDesignRequestById(
+            UUID customDesignRequestId, UUID requestingUserId, String role);
 }

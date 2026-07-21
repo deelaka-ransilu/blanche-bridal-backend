@@ -3,6 +3,7 @@ package com.blanchebridal.backend.appointment.service.impl;
 import com.blanchebridal.backend.appointment.dto.req.CreateAppointmentRequest;
 import com.blanchebridal.backend.appointment.dto.req.RescheduleAppointmentRequest;
 import com.blanchebridal.backend.appointment.dto.res.AppointmentResponse;
+import com.blanchebridal.backend.appointment.dto.res.CustomDesignRequestResponse;
 import com.blanchebridal.backend.appointment.entity.Appointment;
 import com.blanchebridal.backend.appointment.entity.AppointmentStatus;
 import com.blanchebridal.backend.appointment.entity.AppointmentType;
@@ -333,6 +334,62 @@ public class AppointmentServiceImpl implements AppointmentService {
         validateCustomerAccess(appointment, requestingUserId, role);
 
         return toResponse(appointment);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CustomDesignRequestResponse getCustomDesignRequestById(
+            UUID customDesignRequestId, UUID requestingUserId, String role) {
+
+        CustomDesignRequest cdr = customDesignRequestRepository.findById(customDesignRequestId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Custom design request not found: " + customDesignRequestId));
+
+        Appointment appointment = cdr.getAppointment();
+
+        // Reuses the same ownership check as getAppointmentById — a customer
+        // may only view their own custom design request; admin/employee see
+        // any of them.
+        validateCustomerAccess(appointment, requestingUserId, role);
+
+        return toCustomDesignRequestResponse(cdr, appointment);
+    }
+
+// 3. New private mapper — place it near toResponse():
+
+    private CustomDesignRequestResponse toCustomDesignRequestResponse(
+            CustomDesignRequest cdr, Appointment appointment) {
+
+        String customerName = null;
+        String customerEmail = null;
+        UUID userId = null;
+        if (appointment.getUser() != null) {
+            userId = appointment.getUser().getId();
+            customerName = appointment.getUser().getFirstName()
+                    + " " + appointment.getUser().getLastName();
+            customerEmail = appointment.getUser().getEmail();
+        }
+
+        return CustomDesignRequestResponse.builder()
+                .id(cdr.getId())
+                .appointmentId(appointment.getId())
+                .userId(userId)
+                .customerName(customerName)
+                .customerEmail(customerEmail)
+                .appointmentDate(appointment.getAppointmentDate())
+                .timeSlot(appointment.getTimeSlot())
+                .appointmentStatus(appointment.getStatus())
+                .appointmentNotes(appointment.getNotes())
+                .occasionType(cdr.getOccasionType())
+                .occasionDate(cdr.getOccasionDate())
+                .stylePreferences(cdr.getStylePreferences())
+                .referenceImages(readImagesFromJson(cdr.getReferenceImages()))
+                .firstPaymentOrderId(cdr.getFirstPaymentOrder() != null
+                        ? cdr.getFirstPaymentOrder().getId() : null)
+                .secondPaymentOrderId(cdr.getSecondPaymentOrder() != null
+                        ? cdr.getSecondPaymentOrder().getId() : null)
+                .createdAt(cdr.getCreatedAt())
+                .build();
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────
