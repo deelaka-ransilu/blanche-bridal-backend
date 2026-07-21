@@ -133,8 +133,8 @@ public class RentalServiceImpl implements RentalService {
             throw new IllegalStateException("Product is not available for rental: " + product.getName());
         }
 
-        if (!req.getRentalEnd().isAfter(req.getRentalStart())) {
-            throw new IllegalArgumentException("Rental end date must be after start date");
+        if (!req.getRentalEnd().equals(req.getRentalStart().plusDays(1))) {
+            throw new IllegalArgumentException("Rental end date must be exactly one day after the start date");
         }
 
         if (req.getRentalStart().isBefore(LocalDate.now())) {
@@ -251,8 +251,7 @@ public class RentalServiceImpl implements RentalService {
         Rental rental = rentalRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Rental not found: " + id));
 
-        boolean isStaff = role != null &&
-                (role.contains("ADMIN") || role.contains("EMPLOYEE"));
+        boolean isStaff = role != null && role.contains("ADMIN");
         if (!isStaff) {
             throw new UnauthorizedException("Only staff can confirm a rental handover");
         }
@@ -414,7 +413,7 @@ public class RentalServiceImpl implements RentalService {
                 .orElseThrow(() -> new ResourceNotFoundException("Rental not found: " + id));
 
         boolean isOwner = rental.getUser() != null && rental.getUser().getId().equals(userId);
-        boolean isStaff = "ROLE_ADMIN".equals(role) || "ROLE_EMPLOYEE".equals(role);
+        boolean isStaff = "ROLE_ADMIN".equals(role);
         if (!isOwner && !isStaff) {
             throw new UnauthorizedException("Not authorized to cancel this rental");
         }
@@ -569,9 +568,7 @@ public class RentalServiceImpl implements RentalService {
     @Transactional
     public OrderResponse createRentalBooking(CreateRentalBookingRequest req, UUID callerId, String role) {
 
-        boolean isStaff = role != null &&
-                (role.equals("ROLE_ADMIN") || role.equals("ADMIN") ||
-                        role.equals("ROLE_EMPLOYEE") || role.equals("EMPLOYEE"));
+        boolean isStaff = role != null && (role.equals("ROLE_ADMIN") || role.equals("ADMIN"));
 
         if (!isStaff) {
             throw new IllegalStateException("Rental bookings can only be created by staff");
