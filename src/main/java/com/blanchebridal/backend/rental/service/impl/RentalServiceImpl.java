@@ -276,6 +276,16 @@ public class RentalServiceImpl implements RentalService {
                 ? product.getImages().get(0).getUrl()
                 : null;
 
+        // Size was captured on the fitting order's item at booking time —
+        // Rental itself has no size field, so pull it from there rather
+        // than leaving it null on this second synthetic order.
+        String size = null;
+        if (rental.getOrder() != null
+                && rental.getOrder().getItems() != null
+                && !rental.getOrder().getItems().isEmpty()) {
+            size = rental.getOrder().getItems().get(0).getSize();
+        }
+
         OrderItem item = OrderItem.builder()
                 .product(product)
                 .quantity(1)
@@ -283,6 +293,7 @@ public class RentalServiceImpl implements RentalService {
                 .productName((product != null ? product.getName() : "Rental")
                         + " — handover (remaining 50% + security deposit)")
                 .productImage(imageUrl)
+                .size(size)
                 .build();
 
         Order handoverOrder = Order.builder()
@@ -309,7 +320,6 @@ public class RentalServiceImpl implements RentalService {
 
         return toResponse(savedRental);
     }
-
     @Override
     @Transactional(readOnly = true)
     public Page<RentalResponse> getAllRentals(RentalStatus status, Pageable pageable) {
