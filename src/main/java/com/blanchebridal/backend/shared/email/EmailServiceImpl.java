@@ -129,7 +129,8 @@ public class EmailServiceImpl implements EmailService {
                                            String customerName,
                                            String orderId,
                                            BigDecimal totalAmount,
-                                           List<String> itemSummaries) {
+                                           List<String> itemSummaries,
+                                           byte[] receiptPdfBytes) {
 
         StringBuilder itemHtml = new StringBuilder();
 
@@ -152,6 +153,14 @@ public class EmailServiceImpl implements EmailService {
                     </tr>
                     """);
         }
+
+        String receiptNoteHtml = receiptPdfBytes != null
+                ? """
+                  <p style="color:#444444; font-size:15px; line-height:1.6;">
+                      A receipt for this payment is attached as a PDF.
+                  </p>
+                  """
+                : "";
 
         String html = """
                 <!DOCTYPE html>
@@ -180,6 +189,8 @@ public class EmailServiceImpl implements EmailService {
                             Total: LKR %s
                         </p>
 
+                        %s
+
                         <p style="color:#444444; font-size:16px; line-height:1.6;">
                             Thank you for shopping with Blanche Bridal.
                         </p>
@@ -197,10 +208,18 @@ public class EmailServiceImpl implements EmailService {
                 escapeHtml(orderId),
                 itemHtml,
                 totalAmount,
+                receiptNoteHtml,
                 BRAND_COLOR
         );
 
-        sendHtmlEmail(toEmail, "Your Blanche Bridal order is confirmed - #" + orderId, html);
+        sendHtmlEmailWithAttachment(
+                toEmail,
+                "Your Blanche Bridal order is confirmed - #" + orderId,
+                html,
+                receiptPdfBytes,
+                "receipt.pdf",
+                "application/pdf"
+        );
     }
 
     @Async
@@ -1197,10 +1216,14 @@ public class EmailServiceImpl implements EmailService {
     }
 
     /**
-     * Sends an HTML email with an optional iCal .ics attachment.
+     * Sends an HTML email with an optional single binary attachment.
+     * attachmentBytes may be null, in which case no attachment is added —
+     * this lets sendOrderConfirmationEmail call it unconditionally whether
+     * or not a receipt was generated.
      */
-    private void sendHtmlEmailWithIcal(String toEmail, String subject,
-                                       String html, byte[] icalBytes) {
+    private void sendHtmlEmailWithAttachment(String toEmail, String subject, String html,
+                                             byte[] attachmentBytes, String attachmentFilename,
+                                             String attachmentMimeType) {
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
@@ -1210,11 +1233,11 @@ public class EmailServiceImpl implements EmailService {
             helper.setSubject(subject);
             helper.setText(html, true);
 
-            if (icalBytes != null) {
+            if (attachmentBytes != null) {
                 helper.addAttachment(
-                        "appointment.ics",
-                        new ByteArrayResource(icalBytes),
-                        "text/calendar; method=REQUEST; charset=UTF-8"
+                        attachmentFilename,
+                        new ByteArrayResource(attachmentBytes),
+                        attachmentMimeType
                 );
             }
 
@@ -1223,5 +1246,17 @@ public class EmailServiceImpl implements EmailService {
         } catch (MessagingException e) {
             throw new RuntimeException("Failed to send email", e);
         }
+    }
+
+    /**
+     * Sends an HTML email with an optional iCal .ics attachment.
+     * Thin wrapper over sendHtmlEmailWithAttachment for the appointment flows.
+     */
+    private void sendHtmlEmailWithIcal(String toEmail, String subject,
+                                       String html, byte[] icalBytes) {
+        sendHtmlEmailWithAttachment(
+                toEmail, subject, html, icalBytes,
+                "appointment.ics", "text/calendar; method=REQUEST; charset=UTF-8"
+        );
     }
 }

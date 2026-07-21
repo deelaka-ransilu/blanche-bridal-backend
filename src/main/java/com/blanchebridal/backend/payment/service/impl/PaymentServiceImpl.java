@@ -10,6 +10,7 @@ import com.blanchebridal.backend.payment.dto.res.PaymentStatusResponse;
 import com.blanchebridal.backend.payment.entity.Payment;
 import com.blanchebridal.backend.payment.entity.PaymentMethod;
 import com.blanchebridal.backend.payment.entity.PaymentStatus;
+import com.blanchebridal.backend.payment.entity.Receipt;
 import com.blanchebridal.backend.payment.repository.PaymentRepository;
 import com.blanchebridal.backend.payment.service.PaymentService;
 import com.blanchebridal.backend.payment.service.ReceiptService;
@@ -162,13 +163,12 @@ public class PaymentServiceImpl implements PaymentService {
 
             log.info("Payment COMPLETED for order {}. PayHere ID: {}", orderId, payherePaymentId);
 
-            sendOrderConfirmationEmailSafely(order);
+            Receipt receipt = receiptService.generateReceipt(order, payment);
+            sendOrderConfirmationEmailSafely(order, receipt.getPdfData());
 
             if (Boolean.TRUE.equals(order.getIsRentalDeposit())) {
                 handleRentalPaymentConfirmed(order);
             }
-
-            receiptService.generateReceipt(order, payment);
 
         }, () -> log.warn("Webhook received for unknown payhereOrderId: {}", orderId));
     }
@@ -210,13 +210,12 @@ public class PaymentServiceImpl implements PaymentService {
 
         log.info("[Payment] Cash payment CONFIRMED for order {}", orderId);
 
-        sendOrderConfirmationEmailSafely(order);
+        Receipt receipt = receiptService.generateReceipt(order, payment);
+        sendOrderConfirmationEmailSafely(order, receipt.getPdfData());
 
         if (Boolean.TRUE.equals(order.getIsRentalDeposit())) {
             handleRentalPaymentConfirmed(order);
         }
-
-        receiptService.generateReceipt(order, payment);
 
         return PaymentStatusResponse.builder().status(PaymentStatus.COMPLETED.name()).build();
     }
@@ -302,7 +301,12 @@ public class PaymentServiceImpl implements PaymentService {
 
     // ─── Order-confirmation email hook ─────────────────────────────────────
 
-    private void sendOrderConfirmationEmailSafely(Order order) {
+    /**
+     * receiptPdfBytes is the PDF for THIS payment's own receipt (fitting or
+     * handover order each generate their own via generateReceipt()), attached
+     * to this confirmation email only — never a combined or cross-payment PDF.
+     */
+    private void sendOrderConfirmationEmailSafely(Order order, byte[] receiptPdfBytes) {
         try {
             User user = order.getUser();
             if (user == null || user.getEmail() == null || user.getEmail().isBlank()) {
@@ -328,11 +332,12 @@ public class PaymentServiceImpl implements PaymentService {
                     customerName,
                     order.getId().toString(),
                     order.getTotalAmount(),
-                    itemSummaries
+                    itemSummaries,
+                    receiptPdfBytes
             );
 
-            log.info("[Payment] Order confirmation email sent for order {} to {}",
-                    order.getId(), user.getEmail());
+            log.info("[Payment] Order confirmation email sent for order {} to {} (receipt attached: {})",
+                    order.getId(), user.getEmail(), receiptPdfBytes != null);
 
         } catch (Exception e) {
             log.error("[Payment] Failed to send order confirmation email for order {}: {}",

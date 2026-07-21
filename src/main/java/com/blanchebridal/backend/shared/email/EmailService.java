@@ -11,15 +11,28 @@ public interface EmailService {
 
     void sendPasswordResetEmail(String toEmail, String token);
 
+    // Extended with an optional receipt PDF attachment. Kept as the primary
+    // abstract method; the old 5-arg signature becomes a default that
+    // delegates with receiptPdfBytes = null, so any other caller (if one
+    // exists) keeps compiling without changes.
     void sendOrderConfirmationEmail(String toEmail,
                                     String customerName,
                                     String orderId,
                                     BigDecimal totalAmount,
-                                    List<String> itemSummaries);
+                                    List<String> itemSummaries,
+                                    byte[] receiptPdfBytes);
+
+    default void sendOrderConfirmationEmail(String toEmail,
+                                            String customerName,
+                                            String orderId,
+                                            BigDecimal totalAmount,
+                                            List<String> itemSummaries) {
+        sendOrderConfirmationEmail(toEmail, customerName, orderId, totalAmount, itemSummaries, null);
+    }
 
     void sendAppointmentConfirmationEmail(String toEmail,
                                           String customerName,
-                                          UUID appointmentId,          // ← ADD THIS
+                                          UUID appointmentId,
                                           LocalDate appointmentDate,
                                           String timeSlot,
                                           String appointmentType,
@@ -84,31 +97,13 @@ public interface EmailService {
                                        String timeSlot,
                                        String appointmentType);
 
-    /**
-     * Sent when an order transitions to READY — i.e. ready for the
-     * customer to collect (pickup) or ready to be shipped/delivered.
-     * fulfillmentMethod is passed through as a plain string (e.g. "PICKUP",
-     * "DELIVERY") so the template can vary the wording without EmailService
-     * depending on the order module's enum type.
-     */
     void sendOrderReadyEmail(String toEmail,
                              String customerName,
                              String orderId,
                              String fulfillmentMethod);
 
-    /**
-     * Sent when an order is cancelled, whether by the customer or by staff.
-     */
     void sendOrderCancelledEmail(String toEmail, String customerName, String fullOrderId, boolean refundOwed);
 
-    /**
-     * Sent when a refund has been processed for an order. proofImageUrl is
-     * the admin-uploaded transfer receipt (Cloudinary URL) — linked in the
-     * email so "a copy is on file" is a real clickable reference, not just
-     * a claim in the text. Can be null/blank in theory (defensive only —
-     * RefundServiceImpl.createRefund already requires it to be non-blank
-     * before a Refund can be created at all).
-     */
     void sendRefundProcessedEmail(String toEmail,
                                   String customerName,
                                   String orderId,
