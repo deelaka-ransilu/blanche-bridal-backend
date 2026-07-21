@@ -200,6 +200,7 @@ public class ProductController {
                 yield "blanche-bridal/refund-proofs";
             }
             case "custom-design" -> "blanche-bridal/custom-design-references";
+            case "bank-transfer-proof" -> "blanche-bridal/bank-transfer-proofs";
             default -> throw new IllegalArgumentException("Unknown upload context: " + context);
         };
 

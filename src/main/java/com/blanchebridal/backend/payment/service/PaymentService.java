@@ -11,4 +11,6 @@ public interface PaymentService {
     void handleWebhook(Map<String, String> params);
     PaymentStatusResponse getPaymentStatus(UUID orderId, UUID userId, String role);
     PaymentStatusResponse confirmCashPayment(UUID orderId);
+    PaymentStatusResponse confirmBankTransferPayment(UUID orderId);
+    PaymentStatusResponse recordBankTransferProof(UUID orderId, String proofImageUrl, UUID userId);
 }

@@ -2,6 +2,7 @@ package com.blanchebridal.backend.payment.controller;
 
 import com.blanchebridal.backend.auth.security.JwtUtil;
 import com.blanchebridal.backend.exception.UnauthorizedException;
+import com.blanchebridal.backend.payment.dto.req.BankTransferProofRequest;
 import com.blanchebridal.backend.payment.dto.req.InitiatePaymentRequest;
 import com.blanchebridal.backend.payment.service.PaymentService;
 import jakarta.validation.Valid;
@@ -84,6 +85,28 @@ public class PaymentController {
     public ResponseEntity<Map<String, Object>> confirmCashPayment(@PathVariable UUID orderId) {
         log.info("[Payment] Confirming cash payment for order {}", orderId);
         return ResponseEntity.ok(Map.of("success", true, "data", paymentService.confirmCashPayment(orderId)));
+    }
+
+    // CUSTOMER — upload proof-of-transfer, creates PENDING BANK_TRANSFER payment
+    @PostMapping("/{orderId}/bank-transfer-proof")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<Map<String, Object>> submitBankTransferProof(
+            @PathVariable UUID orderId,
+            @Valid @RequestBody BankTransferProofRequest request,
+            @RequestHeader("Authorization") String authHeader) {
+        UUID userId = extractUserId(authHeader);
+        log.info("[Payment] Bank transfer proof submitted → order: {}, user: {}", orderId, userId);
+        return ResponseEntity.ok(Map.of("success", true,
+                "data", paymentService.recordBankTransferProof(orderId, request.url(), userId)));
+    }
+
+    // ADMIN — review proof, confirm bank transfer payment
+    @PostMapping("/{orderId}/confirm-bank-transfer")
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    public ResponseEntity<Map<String, Object>> confirmBankTransfer(@PathVariable UUID orderId) {
+        log.info("[Payment] Confirm bank transfer → order: {}", orderId);
+        return ResponseEntity.ok(Map.of("success", true,
+                "data", paymentService.confirmBankTransferPayment(orderId)));
     }
 
     private UUID extractUserId(String authHeader) {

@@ -1,5 +1,7 @@
 package com.blanchebridal.backend.payment.service.impl;
 
+import com.blanchebridal.backend.appointment.entity.CustomDesignRequest;
+import com.blanchebridal.backend.appointment.repository.CustomDesignRequestRepository;
 import com.blanchebridal.backend.exception.ResourceNotFoundException;
 import com.blanchebridal.backend.exception.UnauthorizedException;
 import com.blanchebridal.backend.order.entity.Order;
@@ -42,6 +44,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PayHereUtil        payHereUtil;
     private final ReceiptService     receiptService;
     private final EmailService       emailService;
+    private final CustomDesignRequestRepository customDesignRequestRepository;
 
     @Value("${payhere.merchant-id}") private String merchantId;
     @Value("${payhere.return-url}")  private String returnUrl;
@@ -169,6 +172,9 @@ public class PaymentServiceImpl implements PaymentService {
             if (Boolean.TRUE.equals(order.getIsRentalDeposit())) {
                 handleRentalPaymentConfirmed(order);
             }
+            if (Boolean.TRUE.equals(order.getIsCustomOrder())) {
+                handleCustomOrderPaymentConfirmed(order);
+            }
 
         }, () -> log.warn("Webhook received for unknown payhereOrderId: {}", orderId));
     }
@@ -216,6 +222,9 @@ public class PaymentServiceImpl implements PaymentService {
         if (Boolean.TRUE.equals(order.getIsRentalDeposit())) {
             handleRentalPaymentConfirmed(order);
         }
+        if (Boolean.TRUE.equals(order.getIsCustomOrder())) {
+            handleCustomOrderPaymentConfirmed(order);
+        }
 
         return PaymentStatusResponse.builder().status(PaymentStatus.COMPLETED.name()).build();
     }
@@ -240,6 +249,99 @@ public class PaymentServiceImpl implements PaymentService {
                 .orElse(PaymentStatusResponse.builder()
                         .status(PaymentStatus.PENDING.name())
                         .build());
+    }
+
+    @Override
+    @Transactional
+    public PaymentStatusResponse confirmBankTransferPayment(UUID orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
+
+        if (order.getPaymentMethod() != PaymentMethod.BANK_TRANSFER) {
+            throw new IllegalStateException("Order is not set up for bank transfer payment");
+        }
+
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new IllegalStateException(
+                    "Order cannot be confirmed — current status: " + order.getStatus());
+        }
+
+        Payment payment = paymentRepository.findByOrder_Id(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "No payment record found for order " + orderId + " — customer must upload proof first"));
+
+        if (payment.getStatus() == PaymentStatus.COMPLETED) {
+            log.info("[Payment] Bank transfer payment already confirmed for order {}. Ignoring.", orderId);
+            return PaymentStatusResponse.builder().status(PaymentStatus.COMPLETED.name()).build();
+        }
+
+        if (payment.getProofImageUrl() == null || payment.getProofImageUrl().isBlank()) {
+            throw new IllegalStateException("Cannot confirm — customer has not uploaded proof of transfer yet");
+        }
+
+        payment.setStatus(PaymentStatus.COMPLETED);
+        payment.setPaidAt(LocalDateTime.now());
+        paymentRepository.save(payment);
+
+        order.setStatus(OrderStatus.CONFIRMED);
+        orderRepository.save(order);
+
+        log.info("[Payment] Bank transfer payment CONFIRMED for order {}", orderId);
+
+        Receipt receipt = receiptService.generateReceipt(order, payment);
+        sendOrderConfirmationEmailSafely(order, receipt.getPdfData());
+
+        if (Boolean.TRUE.equals(order.getIsRentalDeposit())) {
+            handleRentalPaymentConfirmed(order);
+        }
+        if (Boolean.TRUE.equals(order.getIsCustomOrder())) {
+            handleCustomOrderPaymentConfirmed(order);
+        }
+
+        return PaymentStatusResponse.builder().status(PaymentStatus.COMPLETED.name()).build();
+    }
+
+    @Override
+    @Transactional
+    public PaymentStatusResponse recordBankTransferProof(UUID orderId, String proofImageUrl, UUID userId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + orderId));
+
+        if (order.getUser() == null || !order.getUser().getId().equals(userId)) {
+            throw new UnauthorizedException("Access denied to this order");
+        }
+
+        if (order.getPaymentMethod() != PaymentMethod.BANK_TRANSFER) {
+            throw new IllegalStateException("This order is not set up for bank transfer payment");
+        }
+
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new IllegalStateException(
+                    "Order cannot accept payment proof — current status: " + order.getStatus());
+        }
+
+        if (proofImageUrl == null || proofImageUrl.isBlank()) {
+            throw new IllegalArgumentException("proofImageUrl is required");
+        }
+
+        Payment payment = paymentRepository.findByOrder_Id(orderId)
+                .orElseGet(() -> Payment.builder()
+                        .order(order)
+                        .amount(order.getTotalAmount())
+                        .method(PaymentMethod.BANK_TRANSFER)
+                        .status(PaymentStatus.PENDING)
+                        .build());
+
+        if (payment.getStatus() == PaymentStatus.COMPLETED) {
+            throw new IllegalStateException("Payment for this order has already been confirmed");
+        }
+
+        payment.setProofImageUrl(proofImageUrl);
+        paymentRepository.save(payment);
+
+        log.info("[Payment] Bank transfer proof recorded for order {} by user {}", orderId, userId);
+
+        return PaymentStatusResponse.builder().status(payment.getStatus().name()).build();
     }
 
     // ─── Rental-payment hook ────────────────────────────────────────────────
@@ -297,6 +399,48 @@ public class PaymentServiceImpl implements PaymentService {
         rentalRepository.save(rental);
         log.info("[Rental] Rental {} transitioned BOOKED -> ACTIVE (handover payment confirmed, dress handed over).",
                 rental.getId());
+    }
+
+    // ─── Custom-order payment hook ──────────────────────────────────────────
+
+    /**
+     * Called from handleWebhook(), confirmCashPayment(), and
+     * confirmBankTransferPayment() when the confirmed order is a synthetic
+     * custom-order payment (Order.isCustomOrder = true). Dispatches based on
+     * which of the CustomDesignRequest's two order slots this order fills —
+     * mirrors handleRentalPaymentConfirmed's fitting/handover dispatch.
+     */
+    private void handleCustomOrderPaymentConfirmed(Order order) {
+        customDesignRequestRepository.findByFirstPaymentOrder_Id(order.getId()).ifPresentOrElse(
+                this::handleFirstCustomPaymentConfirmed,
+                () -> customDesignRequestRepository.findBySecondPaymentOrder_Id(order.getId()).ifPresentOrElse(
+                        this::handleSecondCustomPaymentConfirmed,
+                        () -> log.warn("[CustomOrder] Order {} flagged isCustomOrder=true but matches "
+                                + "neither a design request's first nor second payment order.", order.getId())
+                )
+        );
+    }
+
+    /**
+     * First payment (deposit or full amount, paid on quote approval) confirmed.
+     * Unlike rentals, there's no separate status field on CustomDesignRequest
+     * to flip here — ProductionStageRecord.currentStage (tracked separately,
+     * created later once production starts) is the real progress indicator.
+     * This just logs confirmation for now; production tracking wiring happens
+     * in Step 4.
+     */
+    private void handleFirstCustomPaymentConfirmed(CustomDesignRequest designRequest) {
+        log.info("[CustomOrder] First payment confirmed for design request {} — order {} now CONFIRMED.",
+                designRequest.getId(), designRequest.getFirstPaymentOrder().getId());
+    }
+
+    /**
+     * Second payment (remaining balance, paid at pickup) confirmed. No status
+     * flip needed here either — this is the final payment in the lifecycle.
+     */
+    private void handleSecondCustomPaymentConfirmed(CustomDesignRequest designRequest) {
+        log.info("[CustomOrder] Second (final) payment confirmed for design request {} — order {} now CONFIRMED.",
+                designRequest.getId(), designRequest.getSecondPaymentOrder().getId());
     }
 
     // ─── Order-confirmation email hook ─────────────────────────────────────
