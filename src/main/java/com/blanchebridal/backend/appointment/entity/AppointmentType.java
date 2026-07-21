@@ -5,5 +5,6 @@ public enum AppointmentType {
     RENTAL_PICKUP, // deprecated — kept only for historical rows, no longer created
     RENTAL_FITTING,
     PURCHASE,
-    CUSTOM_CONSULTATION
+    CUSTOM_CONSULTATION,
+    CUSTOM_FITTING
 }

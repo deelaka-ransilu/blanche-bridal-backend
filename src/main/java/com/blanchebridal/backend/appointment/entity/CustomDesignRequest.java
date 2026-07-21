@@ -1,5 +1,6 @@
 package com.blanchebridal.backend.appointment.entity;
 
+import com.blanchebridal.backend.order.entity.Order;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -31,6 +32,21 @@ public class CustomDesignRequest {
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     private Appointment appointment;
+
+    // add these two fields to CustomDesignRequest.java, alongside the existing
+// appointment/occasionType/etc fields
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "first_payment_order_id")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private Order firstPaymentOrder;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "second_payment_order_id")
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    private Order secondPaymentOrder;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "occasion_type", nullable = false, length = 20)

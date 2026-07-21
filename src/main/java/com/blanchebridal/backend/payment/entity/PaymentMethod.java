@@ -1,5 +1,5 @@
 package com.blanchebridal.backend.payment.entity;
 
 public enum PaymentMethod {
-    PAYHERE, CASH, CARD
+    PAYHERE, CASH, CARD, BANK_TRANSFER
 }

@@ -33,6 +33,12 @@ public class Order {
     @Builder.Default
     private OrderStatus status = OrderStatus.PENDING;
 
+    // add alongside the existing isRentalDeposit field in Order.java
+
+    @Column(name = "is_custom_order", nullable = false)
+    @Builder.Default
+    private Boolean isCustomOrder = false;
+
     @Column(name = "total_amount", nullable = false, precision = 10, scale = 2)
     private BigDecimal totalAmount;
 

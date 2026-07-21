@@ -26,6 +26,11 @@ public class Payment {
     @EqualsAndHashCode.Exclude
     private Order order;
 
+    // add alongside the existing payhereOrderId/payherePaymentId fields in Payment.java
+
+    @Column(name = "proof_image_url", length = 500)
+    private String proofImageUrl;
+
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal amount;
 
