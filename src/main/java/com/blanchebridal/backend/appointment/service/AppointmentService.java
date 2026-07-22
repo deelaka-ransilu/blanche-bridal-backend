@@ -4,6 +4,7 @@ import com.blanchebridal.backend.appointment.dto.req.CreateAppointmentRequest;
 import com.blanchebridal.backend.appointment.dto.req.RescheduleAppointmentRequest;
 import com.blanchebridal.backend.appointment.dto.res.AppointmentResponse;
 import com.blanchebridal.backend.appointment.dto.res.CustomDesignRequestResponse;
+import com.blanchebridal.backend.appointment.dto.res.CustomOrderSummaryResponse;
 import com.blanchebridal.backend.appointment.entity.AppointmentStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -25,4 +26,6 @@ public interface AppointmentService {
     AppointmentResponse getAppointmentById(UUID id, UUID requestingUserId, String role);
     CustomDesignRequestResponse getCustomDesignRequestById(
             UUID customDesignRequestId, UUID requestingUserId, String role);
+    // AppointmentService.java — add
+    List<CustomOrderSummaryResponse> getAllCustomOrders();
 }

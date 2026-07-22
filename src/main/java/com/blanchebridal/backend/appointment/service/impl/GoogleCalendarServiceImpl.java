@@ -1,30 +1,33 @@
 package com.blanchebridal.backend.appointment.service.impl;
 
 import com.blanchebridal.backend.appointment.entity.Appointment;
+import com.blanchebridal.backend.appointment.repository.AppointmentRepository;
 import com.blanchebridal.backend.appointment.service.GoogleCalendarService;
 import com.google.api.client.util.DateTime;
 import com.google.api.services.calendar.Calendar;
 import com.google.api.services.calendar.model.Event;
 import com.google.api.services.calendar.model.EventDateTime;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Service
-//@RequiredArgsConstructor
 public class GoogleCalendarServiceImpl implements GoogleCalendarService {
 
     @Autowired(required = false)
     private Calendar googleCalendarClient;
+
+    @Autowired
+    private AppointmentRepository appointmentRepository;
 
     @Value("${google.calendar-id}")
     private String calendarId;
@@ -34,6 +37,12 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
     private static final DateTimeFormatter TIME_FMT =
             DateTimeFormatter.ofPattern("HH:mm");
 
+    // Synchronous — kept as-is so it can still be called directly and
+    // return the real event id immediately (e.g. from createEventAsync
+    // below, or from any future caller that genuinely needs to block on
+    // the result). NOT annotated @Async: an @Async method with a non-void,
+    // non-Future return type silently discards its return value, which
+    // would make eventId always come back null to any synchronous caller.
     @Override
     public String createEvent(Appointment appointment) {
         if (googleCalendarClient == null) {
@@ -60,6 +69,27 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
         }
     }
 
+    // Fire-and-forget wrapper used by AppointmentServiceImpl.confirmAppointment
+    // so the calendar API round-trip (which can take several seconds) no
+    // longer blocks the confirm request/response cycle. Runs on a separate
+    // thread — can't share the caller's transaction or in-memory entity, so
+    // it does its own repository lookup and save once the event is created.
+    @Async
+    @Override
+    public void createEventAsync(UUID appointmentId) {
+        appointmentRepository.findById(appointmentId).ifPresent(appointment -> {
+            String eventId = createEvent(appointment);
+            if (eventId != null) {
+                appointment.setGoogleEventId(eventId);
+                appointmentRepository.save(appointment);
+            }
+        });
+    }
+
+    // Async — void return, no caller depends on its result synchronously
+    // (rescheduleAppointment just fires and moves on), so this is safe to
+    // mark @Async directly without a wrapper.
+    @Async
     @Override
     public void updateEvent(String googleEventId, Appointment appointment) {
         if (googleCalendarClient == null) { return; }
@@ -96,6 +126,8 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
         }
     }
 
+    // Async — same reasoning as updateEvent above.
+    @Async
     @Override
     public void deleteEvent(String googleEventId) {
         if (googleCalendarClient == null) { return; }

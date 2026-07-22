@@ -1,8 +1,10 @@
-package com.blanchebridal.backend.appointment.controller;
+package com.blanchebridal.backend.order.controller;
 
-import com.blanchebridal.backend.appointment.service.AppointmentService;
 import com.blanchebridal.backend.auth.security.JwtUtil;
 import com.blanchebridal.backend.exception.UnauthorizedException;
+import com.blanchebridal.backend.order.dto.req.ConfirmSecondPaymentRequest;
+import com.blanchebridal.backend.order.service.CustomOrderService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -15,39 +17,32 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 import java.util.UUID;
 
-// Purpose-built "everything about this custom order" read endpoint — see
-// CustomDesignRequestResponse for why this exists as its own controller
-// rather than being folded into AppointmentController. Keyed off
-// CustomDesignRequest id, consistent with CustomQuoteController's endpoints.
 @Slf4j
 @RestController
 @RequestMapping("/api/custom-design-requests")
 @RequiredArgsConstructor
-public class CustomDesignRequestController {
+public class CustomOrderController {
 
-    private final AppointmentService appointmentService;
+    private final CustomOrderService customOrderService;
     private final JwtUtil jwtUtil;
 
-    @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE')")
-    public ResponseEntity<Map<String, Object>> getCustomDesignRequestById(
+    // ADMIN — confirm second (final) payment at pickup, once production
+    // has reached READY_FOR_PICKUP. Mirrors RentalController#confirmHandover.
+    @PostMapping("/{id}/confirm-second-payment")
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    public ResponseEntity<Map<String, Object>> confirmSecondPayment(
             @PathVariable UUID id,
+            @Valid @RequestBody ConfirmSecondPaymentRequest request,
             @RequestHeader("Authorization") String authHeader) {
 
-        UUID userId = extractUserId(authHeader);
+        UUID adminId = extractUserId(authHeader);
         String role = extractRole();
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "data", appointmentService.getCustomDesignRequestById(id, userId, role)
-        ));
-    }
 
-    @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN')")
-    public ResponseEntity<Map<String, Object>> getAllCustomOrders() {
+        log.info("[CustomOrder] Second payment confirmation request — design request: {}, admin: {}",
+                id, adminId);
         return ResponseEntity.ok(Map.of(
                 "success", true,
-                "data", appointmentService.getAllCustomOrders()
+                "data", customOrderService.confirmSecondPayment(id, request, adminId, role)
         ));
     }
 

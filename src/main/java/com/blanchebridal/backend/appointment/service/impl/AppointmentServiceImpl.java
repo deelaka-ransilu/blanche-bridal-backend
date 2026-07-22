@@ -4,6 +4,7 @@ import com.blanchebridal.backend.appointment.dto.req.CreateAppointmentRequest;
 import com.blanchebridal.backend.appointment.dto.req.RescheduleAppointmentRequest;
 import com.blanchebridal.backend.appointment.dto.res.AppointmentResponse;
 import com.blanchebridal.backend.appointment.dto.res.CustomDesignRequestResponse;
+import com.blanchebridal.backend.appointment.dto.res.CustomOrderSummaryResponse;
 import com.blanchebridal.backend.appointment.entity.Appointment;
 import com.blanchebridal.backend.appointment.entity.AppointmentStatus;
 import com.blanchebridal.backend.appointment.entity.AppointmentType;
@@ -14,6 +15,8 @@ import com.blanchebridal.backend.appointment.repository.CustomDesignRequestRepos
 import com.blanchebridal.backend.appointment.repository.TimeSlotConfigRepository;
 import com.blanchebridal.backend.appointment.service.AppointmentService;
 import com.blanchebridal.backend.appointment.service.GoogleCalendarService;
+import com.blanchebridal.backend.order.entity.Order;
+import com.blanchebridal.backend.order.repository.ProductionStageRecordRepository;
 import com.blanchebridal.backend.shared.email.EmailService;
 import com.blanchebridal.backend.exception.ResourceNotFoundException;
 import com.blanchebridal.backend.exception.UnauthorizedException;
@@ -54,6 +57,8 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final GoogleCalendarService googleCalendarService;
     private final EmailService emailService;
     private final ObjectMapper objectMapper;
+    private final ProductionStageRecordRepository productionStageRecordRepository;
+    private final com.blanchebridal.backend.payment.repository.PaymentRepository paymentRepository;
 
     private static final String ROLE_CUSTOMER = "ROLE_CUSTOMER";
     private static final String ROLE_CUSTOMER_ALT = "CUSTOMER";
@@ -178,11 +183,10 @@ public class AppointmentServiceImpl implements AppointmentService {
     public AppointmentResponse confirmAppointment(UUID id) {
         Appointment appointment = findById(id);
         appointment.setStatus(AppointmentStatus.CONFIRMED);
-
-        String eventId = googleCalendarService.createEvent(appointment);
-        appointment.setGoogleEventId(eventId);
-
         Appointment saved = appointmentRepository.save(appointment);
+
+        // Fire-and-forget — calendar sync no longer blocks this request.
+        googleCalendarService.createEventAsync(saved.getId());
 
         try {
             User customer = saved.getUser();
@@ -203,7 +207,6 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         return toResponse(saved);
     }
-
     @Override
     @Transactional
     public AppointmentResponse cancelAppointment(UUID id, UUID requestingUserId, String role) {
@@ -355,6 +358,44 @@ public class AppointmentServiceImpl implements AppointmentService {
         return toCustomDesignRequestResponse(cdr, appointment);
     }
 
+    @Override
+    public List<CustomOrderSummaryResponse> getAllCustomOrders() {
+        return customDesignRequestRepository.findByFirstPaymentOrderIsNotNullOrderByCreatedAtDesc()
+                .stream()
+                .map(cdr -> {
+                    Order firstOrder = cdr.getFirstPaymentOrder();
+
+                    String stage = productionStageRecordRepository.findByOrderId(firstOrder.getId())
+                            .map(r -> r.getCurrentStage().name())
+                            .orElse(null);
+
+                    String customerName = null;
+                    String customerEmail = null;
+                    User user = cdr.getAppointment() != null ? cdr.getAppointment().getUser() : null;
+                    if (user != null) {
+                        customerName = user.getFirstName() + " " + user.getLastName();
+                        customerEmail = user.getEmail();
+                    }
+
+                    String paymentStatus = paymentRepository.findByOrder_Id(firstOrder.getId())
+                            .map(p -> p.getStatus().name())
+                            .orElse("PENDING");
+
+                    return CustomOrderSummaryResponse.builder()
+                            .id(cdr.getId())
+                            .customerName(customerName)
+                            .customerEmail(customerEmail)
+                            .occasionDate(cdr.getOccasionDate())
+                            .firstPaymentOrderId(firstOrder.getId())
+                            .secondPaymentOrderId(cdr.getSecondPaymentOrder() != null
+                                    ? cdr.getSecondPaymentOrder().getId() : null)
+                            .firstPaymentStatus(paymentStatus)
+                            .currentProductionStage(stage)
+                            .createdAt(cdr.getCreatedAt())
+                            .build();
+                })
+                .toList();
+    }
 // 3. New private mapper — place it near toResponse():
 
     private CustomDesignRequestResponse toCustomDesignRequestResponse(
