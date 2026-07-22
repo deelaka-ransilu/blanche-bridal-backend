@@ -359,15 +359,12 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<CustomOrderSummaryResponse> getAllCustomOrders() {
-        return customDesignRequestRepository.findByFirstPaymentOrderIsNotNullOrderByCreatedAtDesc()
+        return customDesignRequestRepository.findAllByOrderByCreatedAtDesc()
                 .stream()
                 .map(cdr -> {
                     Order firstOrder = cdr.getFirstPaymentOrder();
-
-                    String stage = productionStageRecordRepository.findByOrderId(firstOrder.getId())
-                            .map(r -> r.getCurrentStage().name())
-                            .orElse(null);
 
                     String customerName = null;
                     String customerEmail = null;
@@ -377,16 +374,24 @@ public class AppointmentServiceImpl implements AppointmentService {
                         customerEmail = user.getEmail();
                     }
 
-                    String paymentStatus = paymentRepository.findByOrder_Id(firstOrder.getId())
-                            .map(p -> p.getStatus().name())
-                            .orElse("PENDING");
+                    UUID firstOrderId = firstOrder != null ? firstOrder.getId() : null;
+                    String paymentStatus = firstOrder != null
+                            ? paymentRepository.findByOrder_Id(firstOrder.getId())
+                              .map(p -> p.getStatus().name())
+                              .orElse("PENDING")
+                            : null;
+                    String stage = firstOrder != null
+                            ? productionStageRecordRepository.findByOrderId(firstOrder.getId())
+                              .map(r -> r.getCurrentStage().name())
+                              .orElse(null)
+                            : null;
 
                     return CustomOrderSummaryResponse.builder()
                             .id(cdr.getId())
                             .customerName(customerName)
                             .customerEmail(customerEmail)
                             .occasionDate(cdr.getOccasionDate())
-                            .firstPaymentOrderId(firstOrder.getId())
+                            .firstPaymentOrderId(firstOrderId)
                             .secondPaymentOrderId(cdr.getSecondPaymentOrder() != null
                                     ? cdr.getSecondPaymentOrder().getId() : null)
                             .firstPaymentStatus(paymentStatus)
@@ -396,7 +401,52 @@ public class AppointmentServiceImpl implements AppointmentService {
                 })
                 .toList();
     }
-// 3. New private mapper — place it near toResponse():
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CustomOrderSummaryResponse> getMyCustomOrders(UUID userId) {
+        return customDesignRequestRepository.findByAppointment_User_IdOrderByCreatedAtDesc(userId)
+                .stream()
+                .map(this::toCustomOrderSummary)
+                .toList();
+    }
+
+    private CustomOrderSummaryResponse toCustomOrderSummary(CustomDesignRequest cdr) {
+        Order firstOrder = cdr.getFirstPaymentOrder();
+
+        String customerName = null;
+        String customerEmail = null;
+        User user = cdr.getAppointment() != null ? cdr.getAppointment().getUser() : null;
+        if (user != null) {
+            customerName = user.getFirstName() + " " + user.getLastName();
+            customerEmail = user.getEmail();
+        }
+
+        UUID firstOrderId = firstOrder != null ? firstOrder.getId() : null;
+        String paymentStatus = firstOrder != null
+                ? paymentRepository.findByOrder_Id(firstOrder.getId())
+                  .map(p -> p.getStatus().name())
+                  .orElse("PENDING")
+                : null;
+        String stage = firstOrder != null
+                ? productionStageRecordRepository.findByOrderId(firstOrder.getId())
+                  .map(r -> r.getCurrentStage().name())
+                  .orElse(null)
+                : null;
+
+        return CustomOrderSummaryResponse.builder()
+                .id(cdr.getId())
+                .customerName(customerName)
+                .customerEmail(customerEmail)
+                .occasionDate(cdr.getOccasionDate())
+                .firstPaymentOrderId(firstOrderId)
+                .secondPaymentOrderId(cdr.getSecondPaymentOrder() != null
+                        ? cdr.getSecondPaymentOrder().getId() : null)
+                .firstPaymentStatus(paymentStatus)
+                .currentProductionStage(stage)
+                .createdAt(cdr.getCreatedAt())
+                .build();
+    }
 
     private CustomDesignRequestResponse toCustomDesignRequestResponse(
             CustomDesignRequest cdr, Appointment appointment) {

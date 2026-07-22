@@ -28,6 +28,20 @@ public class CustomDesignRequestController {
     private final AppointmentService appointmentService;
     private final JwtUtil jwtUtil;
 
+    // Must come before "/{id}" — otherwise Spring tries to parse "my" as a
+    // UUID path variable and this route never matches.
+    @GetMapping("/my")
+    @PreAuthorize("hasAnyRole('CUSTOMER')")
+    public ResponseEntity<Map<String, Object>> getMyCustomOrders(
+            @RequestHeader("Authorization") String authHeader) {
+
+        UUID userId = extractUserId(authHeader);
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "data", appointmentService.getMyCustomOrders(userId)
+        ));
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE')")
     public ResponseEntity<Map<String, Object>> getCustomDesignRequestById(

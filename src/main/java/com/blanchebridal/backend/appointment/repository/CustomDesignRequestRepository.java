@@ -13,6 +13,9 @@ public interface CustomDesignRequestRepository extends JpaRepository<CustomDesig
     Optional<CustomDesignRequest> findByFirstPaymentOrder_Id(UUID orderId);
     Optional<CustomDesignRequest> findBySecondPaymentOrder_Id(UUID orderId);
 
-    // NEW — backs the /admin/orders "Custom" tab list
     List<CustomDesignRequest> findByFirstPaymentOrderIsNotNullOrderByCreatedAtDesc();
+    List<CustomDesignRequest> findAllByOrderByCreatedAtDesc();
+
+    // NEW — backs the customer's own /my/orders "Custom" tab
+    List<CustomDesignRequest> findByAppointment_User_IdOrderByCreatedAtDesc(UUID userId);
 }

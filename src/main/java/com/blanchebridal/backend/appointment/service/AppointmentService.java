@@ -28,4 +28,5 @@ public interface AppointmentService {
             UUID customDesignRequestId, UUID requestingUserId, String role);
     // AppointmentService.java — add
     List<CustomOrderSummaryResponse> getAllCustomOrders();
+    List<CustomOrderSummaryResponse> getMyCustomOrders(UUID userId);
 }
