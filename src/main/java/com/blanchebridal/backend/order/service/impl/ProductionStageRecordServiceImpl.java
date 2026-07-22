@@ -20,8 +20,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -35,6 +37,17 @@ public class ProductionStageRecordServiceImpl implements ProductionStageRecordSe
     private final UserRepository userRepository;
     private final EmailService emailService;
     private final CustomDesignRequestRepository customDesignRequestRepository;
+
+    // Employees may only ever propose these two mid-pipeline stages. Design
+    // finalization and fabric sourcing/cutting happen before an employee is
+    // assigned; fitting, quality check, and pickup are admin/customer-facing
+    // stages per product decision. An employee-authored proposal outside
+    // this range is either a stale UI or a forged request — reject it
+    // server-side, don't just rely on the dropdown being filtered.
+    private static final Set<ProductionStage> EMPLOYEE_PROPOSABLE_STAGES = EnumSet.of(
+            ProductionStage.BASE_STRUCTURE_STITCHED,
+            ProductionStage.DETAILING_EMBELLISHMENT_ADDED
+    );
 
     @Override
     public ProductionStageRecordResponse createRecord(UUID orderId, CreateProductionRecordRequest req, UUID adminId) {
@@ -86,6 +99,11 @@ public class ProductionStageRecordServiceImpl implements ProductionStageRecordSe
 
         if (record.getAssignedEmployee() == null || !record.getAssignedEmployee().getId().equals(employeeId)) {
             throw new UnauthorizedException("You are not assigned to this order's production record");
+        }
+
+        if (!EMPLOYEE_PROPOSABLE_STAGES.contains(req.getPendingStage())) {
+            throw new ConflictException(
+                    "Employees may only propose 'Base structure stitched' or 'Detailing & embellishment added'");
         }
 
         User employee = userRepository.findById(employeeId)
@@ -170,6 +188,15 @@ public class ProductionStageRecordServiceImpl implements ProductionStageRecordSe
     @Transactional(readOnly = true)
     public List<ProductionStageRecordResponse> getPendingApprovals() {
         return recordRepository.findByStatus(ProductionStatus.PENDING_APPROVAL)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductionStageRecordResponse> getMyAssignedProductions(UUID employeeId) {
+        return recordRepository.findByAssignedEmployee_Id(employeeId)
                 .stream()
                 .map(this::toResponse)
                 .toList();

@@ -17,4 +17,6 @@ public interface ProductionStageRecordRepository extends JpaRepository<Productio
     List<ProductionStageRecord> findByAssignedEmployeeId(UUID employeeId);
 
     List<ProductionStageRecord> findByStatus(ProductionStatus status);
+
+    List<ProductionStageRecord> findByAssignedEmployee_Id(UUID employeeId);
 }

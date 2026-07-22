@@ -28,4 +28,6 @@ public interface ProductionStageRecordService {
     // (i.e. an employee has proposed a stage change that hasn't been
     // approved or rejected yet).
     List<ProductionStageRecordResponse> getPendingApprovals();
+
+    List<ProductionStageRecordResponse> getMyAssignedProductions(UUID employeeId);
 }

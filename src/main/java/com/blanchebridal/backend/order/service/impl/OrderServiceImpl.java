@@ -26,6 +26,7 @@ import com.blanchebridal.backend.product.repository.ProductRepository;
 import com.blanchebridal.backend.user.entity.User;
 import com.blanchebridal.backend.user.entity.UserRole;
 import com.blanchebridal.backend.user.repository.UserRepository;
+import com.blanchebridal.backend.appointment.repository.CustomDesignRequestRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -50,7 +51,9 @@ public class OrderServiceImpl implements OrderService {
     private final PaymentRepository paymentRepository;
     private final RefundRepository refundRepository;
     private final RefundBankDetailsRepository refundBankDetailsRepository;
+    private final CustomDesignRequestRepository customDesignRequestRepository;
     private final EmailService emailService;
+
 
     @Override
     @Transactional
@@ -445,6 +448,15 @@ public class OrderServiceImpl implements OrderService {
         Refund refund = refundRepository.findByOrder_Id(order.getId()).orElse(null);
         boolean bankDetailsSubmitted = refundBankDetailsRepository.existsByOrder_Id(order.getId());
 
+        // Same lookup pattern as ProductionStageRecordServiceImpl.fireStageEmail —
+        // an Order may be linked as either the first- or second-payment order
+        // for a CustomDesignRequest, so try both FK directions.
+        UUID customDesignRequestId = customDesignRequestRepository
+                .findByFirstPaymentOrder_Id(order.getId())
+                .or(() -> customDesignRequestRepository.findBySecondPaymentOrder_Id(order.getId()))
+                .map(cdr -> cdr.getId())
+                .orElse(null);
+
         return OrderResponse.builder()
                 .id(order.getId())
                 .status(order.getStatus())
@@ -468,8 +480,9 @@ public class OrderServiceImpl implements OrderService {
                 .paymentStatus(payment != null ? payment.getStatus() : null)
                 .refundAmount(refund != null ? refund.getAmount() : null)
                 .refundedAt(refund != null ? refund.getCreatedAt() : null)
-                .refundProofImageUrl(refund != null ? refund.getProofImageUrl() : null)   // ← ADD THIS LINE
+                .refundProofImageUrl(refund != null ? refund.getProofImageUrl() : null)
                 .bankDetailsSubmitted(bankDetailsSubmitted)
+                .customDesignRequestId(customDesignRequestId)
                 .build();
     }
 

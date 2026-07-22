@@ -91,4 +91,13 @@ public class ProductionStageRecordController {
     public ResponseEntity<List<ProductionStageRecordResponse>> getPendingApprovals() {
         return ResponseEntity.ok(productionService.getPendingApprovals());
     }
+
+    // Employee dashboard — production records currently assigned to the
+    // calling employee, across all their orders.
+    @GetMapping("/api/employee/production/my")
+    @PreAuthorize("hasRole('EMPLOYEE')")
+    public ResponseEntity<List<ProductionStageRecordResponse>> getMyAssignedProductions(
+            @AuthenticationPrincipal User employee) {
+        return ResponseEntity.ok(productionService.getMyAssignedProductions(employee.getId()));
+    }
 }

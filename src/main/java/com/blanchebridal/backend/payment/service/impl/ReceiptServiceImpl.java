@@ -267,18 +267,30 @@ public class ReceiptServiceImpl implements ReceiptService {
                     .setPadding(6));
         }
 
-        // Data rows
-        for (OrderItem item : order.getItems()) {
-            BigDecimal subtotal = item.getUnitPrice()
-                    .multiply(BigDecimal.valueOf(item.getQuantity()));
+        // Data rows — custom orders have no real OrderItem rows (synthetic
+        // Order created at quote-approval time, per 0a-13), so synthesize a
+        // single descriptive row instead of leaving the table empty.
+        if (order.getItems() == null || order.getItems().isEmpty()) {
+            if (Boolean.TRUE.equals(order.getIsCustomOrder())) {
+                table.addCell(cell("Custom design order", regular));
+                table.addCell(cell("—", regular));
+                table.addCell(cell("1", regular));
+                table.addCell(cell(formatAmount(order.getTotalAmount()), regular));
+                table.addCell(cell(formatAmount(order.getTotalAmount()), regular));
+            }
+        } else {
+            for (OrderItem item : order.getItems()) {
+                BigDecimal subtotal = item.getUnitPrice()
+                        .multiply(BigDecimal.valueOf(item.getQuantity()));
 
-            table.addCell(cell(item.getProductName() != null
-                    ? item.getProductName() : "—", regular));
-            table.addCell(cell(item.getSize() != null
-                    ? item.getSize() : "—", regular));
-            table.addCell(cell(String.valueOf(item.getQuantity()), regular));
-            table.addCell(cell(formatAmount(item.getUnitPrice()), regular));
-            table.addCell(cell(formatAmount(subtotal), regular));
+                table.addCell(cell(item.getProductName() != null
+                        ? item.getProductName() : "—", regular));
+                table.addCell(cell(item.getSize() != null
+                        ? item.getSize() : "—", regular));
+                table.addCell(cell(String.valueOf(item.getQuantity()), regular));
+                table.addCell(cell(formatAmount(item.getUnitPrice()), regular));
+                table.addCell(cell(formatAmount(subtotal), regular));
+            }
         }
 
         // Total row — tinted to draw the eye, matching the table header

@@ -48,4 +48,11 @@ public class OrderResponse {
     // True once the customer has submitted RefundBankDetails for this
     // order, regardless of whether the refund itself has been issued yet.
     private Boolean bankDetailsSubmitted;
+
+    // The CustomDesignRequest this order belongs to, if any — set when this
+    // Order is either a first- or second-payment synthetic order for a
+    // custom design. Null for regular product orders. Lets the frontend
+    // link back to /my/custom-design/{id} and detect "this is a custom
+    // order" without depending solely on ProductionStageRecord existing.
+    private UUID customDesignRequestId;
 }
