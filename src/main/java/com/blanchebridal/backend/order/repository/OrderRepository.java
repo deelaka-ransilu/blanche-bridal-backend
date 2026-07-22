@@ -25,4 +25,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
 
     List<Order> findByStatusAndPaymentMethodAndCreatedAtBefore(
             OrderStatus status, PaymentMethod paymentMethod, LocalDateTime cutoff);
+
+    List<Order> findByStatusAndPaymentMethodAndIsCustomOrderFalseAndCreatedAtBefore(
+            OrderStatus status, PaymentMethod paymentMethod, LocalDateTime cutoff);
 }

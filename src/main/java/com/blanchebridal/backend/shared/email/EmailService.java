@@ -124,4 +124,8 @@ public interface EmailService {
                               String customerName,
                               UUID customDesignRequestId,
                               com.blanchebridal.backend.order.dto.res.CustomQuoteResponse quote);
+
+    void sendCustomDressFittingReadyEmail(String toEmail, String customerName, UUID customDesignRequestId);
+
+    void sendCustomDressReadyForPickupEmail(String toEmail, String customerName, UUID customDesignRequestId);
 }

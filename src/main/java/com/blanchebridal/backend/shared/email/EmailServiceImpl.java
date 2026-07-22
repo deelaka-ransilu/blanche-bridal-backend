@@ -1190,6 +1190,90 @@ public class EmailServiceImpl implements EmailService {
         sendHtmlEmail(toEmail, "Your Blanche Bridal custom order quote is ready", html);
     }
 
+    @Async
+    @Override
+    public void sendCustomDressFittingReadyEmail(String toEmail, String customerName, UUID customDesignRequestId) {
+        String viewLink = frontendUrl + "/my/custom-design/" + customDesignRequestId;
+
+        String html = """
+        <!DOCTYPE html>
+        <html>
+        <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
+            <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
+                <h1 style="color:%s; text-align:center;">Your Dress is Ready for Fitting ✂</h1>
+
+                <p style="color:#444444; font-size:16px; line-height:1.6;">Dear %s,</p>
+
+                <p style="color:#444444; font-size:16px; line-height:1.6;">
+                    Great news — your custom dress has reached the fitting stage!
+                    Please contact us to schedule your fitting appointment at a time that suits you.
+                </p>
+
+                <p style="color:#444444; font-size:15px; line-height:1.6;">
+                    At the fitting, our team will check the fit and make any final adjustments
+                    to ensure your dress is perfect for your special day.
+                </p>
+
+                <div style="text-align:center; margin-top:24px;">
+                    <a href="%s"
+                       style="display:inline-block; padding:14px 28px; background-color:%s; color:#ffffff; text-decoration:none; border-radius:8px; font-weight:bold;">
+                        View Your Order
+                    </a>
+                </div>
+
+                <p style="font-size:14px; color:%s; text-align:center; margin-top:28px;">
+                    Blanche Bridal
+                </p>
+            </div>
+        </body>
+        </html>
+        """.formatted(BRAND_COLOR, escapeHtml(customerName), viewLink, BRAND_COLOR, BRAND_COLOR);
+
+        sendHtmlEmail(toEmail, "Your custom dress is ready for fitting — Blanche Bridal", html);
+    }
+
+    @Async
+    @Override
+    public void sendCustomDressReadyForPickupEmail(String toEmail, String customerName, UUID customDesignRequestId) {
+        String viewLink = frontendUrl + "/my/custom-design/" + customDesignRequestId;
+
+        String html = """
+        <!DOCTYPE html>
+        <html>
+        <body style="margin:0; padding:0; background-color:#f8f3f0; font-family:Arial, sans-serif;">
+            <div style="max-width:600px; margin:30px auto; background-color:#ffffff; padding:30px; border-radius:12px;">
+                <h1 style="color:%s; text-align:center;">Your Dress is Ready for Pickup 🎉</h1>
+
+                <p style="color:#444444; font-size:16px; line-height:1.6;">Dear %s,</p>
+
+                <p style="color:#444444; font-size:16px; line-height:1.6;">
+                    Your custom dress has passed our quality check and is ready for pickup!
+                    Please visit our store at your earliest convenience to collect it.
+                </p>
+
+                <p style="color:#444444; font-size:15px; line-height:1.6;">
+                    The remaining balance will be collected at pickup.
+                    Please bring a valid ID when you come to collect your dress.
+                </p>
+
+                <div style="text-align:center; margin-top:24px;">
+                    <a href="%s"
+                       style="display:inline-block; padding:14px 28px; background-color:%s; color:#ffffff; text-decoration:none; border-radius:8px; font-weight:bold;">
+                        View Your Order
+                    </a>
+                </div>
+
+                <p style="font-size:14px; color:%s; text-align:center; margin-top:28px;">
+                    Blanche Bridal
+                </p>
+            </div>
+        </body>
+        </html>
+        """.formatted(BRAND_COLOR, escapeHtml(customerName), viewLink, BRAND_COLOR, BRAND_COLOR);
+
+        sendHtmlEmail(toEmail, "Your custom dress is ready for pickup — Blanche Bridal", html);
+    }
+
     private void sendHtmlEmail(String toEmail, String subject, String html) {
         try {
             MimeMessage message = mailSender.createMimeMessage();

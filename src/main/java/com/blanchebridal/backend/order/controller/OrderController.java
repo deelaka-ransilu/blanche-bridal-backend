@@ -7,6 +7,7 @@ import com.blanchebridal.backend.order.dto.req.UpdateOrderStatusRequest;
 import com.blanchebridal.backend.order.dto.res.OrderResponse;
 import com.blanchebridal.backend.order.entity.OrderStatus;
 import com.blanchebridal.backend.order.service.OrderService;
+import com.blanchebridal.backend.payment.entity.PaymentMethod;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -128,6 +129,19 @@ public class OrderController {
         orderService.cancelOrder(id, userId);
         return ResponseEntity.ok(Map.of("success", true));
     }
+
+    @PutMapping("/{id}/payment-method")
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    public ResponseEntity<Map<String, Object>> updatePaymentMethod(
+            @PathVariable UUID id,
+            @RequestBody Map<String, String> body) {
+
+        PaymentMethod method = PaymentMethod.valueOf(body.get("paymentMethod"));
+        log.info("[Order] Payment method update request — order: {}, method: {}", id, method);
+        return ResponseEntity.ok(Map.of("success", true,
+                "data", orderService.updatePaymentMethod(id, method)));
+    }
+
 
     private UUID extractUserId(String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {

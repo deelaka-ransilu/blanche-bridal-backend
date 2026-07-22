@@ -16,15 +16,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 
-// Cancels PENDING PayHere orders that were never completed within the
-// expiry window, and restores the stock they reserved at creation time
-// (same restoreStock logic/intent as OrderServiceImpl's customer-initiated
-// cancelOrder — duplicated here rather than injecting OrderServiceImpl to
-// avoid a circular/awkward dependency; if this drifts out of sync with that
-// method, consolidate then).
-//
 // CASH orders are deliberately excluded — those are staff-assisted, paid
 // in person, and managed manually by admin, not abandoned checkouts.
+//
+// Custom orders (isCustomOrder = true) are also excluded — these are
+// synthetic Orders created from an approved quote, not a normal cart
+// checkout, and can legitimately sit pending for days while the customer
+// arranges payment (PayHere, cash, or bank transfer) at their own pace.
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -42,7 +40,7 @@ public class StaleOrderExpiryJob {
     public void expireStalePendingOrders() {
         LocalDateTime cutoff = LocalDateTime.now().minusMinutes(EXPIRY_MINUTES);
 
-        List<Order> stale = orderRepository.findByStatusAndPaymentMethodAndCreatedAtBefore(
+        List<Order> stale = orderRepository.findByStatusAndPaymentMethodAndIsCustomOrderFalseAndCreatedAtBefore(
                 OrderStatus.PENDING, PaymentMethod.PAYHERE, cutoff);
 
         if (stale.isEmpty()) return;

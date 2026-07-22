@@ -309,6 +309,36 @@ public class OrderServiceImpl implements OrderService {
         sendCancelledEmailSafely(saved);
     }
 
+    @Override
+    @Transactional
+    public OrderResponse updatePaymentMethod(UUID id, PaymentMethod newMethod) {
+        Order order = orderRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + id));
+
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new IllegalStateException(
+                    "Payment method can only be changed while the order is PENDING — current status: "
+                            + order.getStatus());
+        }
+
+        // A CASH switch only makes sense if no payment attempt has started —
+        // if a PayHere Payment row already exists (even PENDING, from a customer
+        // who opened the checkout form), switching underneath it would orphan
+        // that row. Block the switch in that case; admin should let it expire
+        // or the flow needs a separate "void existing payment" step first.
+        paymentRepository.findByOrder_Id(id).ifPresent(p -> {
+            if (p.getStatus() == PaymentStatus.COMPLETED) {
+                throw new IllegalStateException("Cannot change payment method — payment already completed");
+            }
+        });
+
+        PaymentMethod previous = order.getPaymentMethod();
+        order.setPaymentMethod(newMethod);
+        Order saved = orderRepository.save(order);
+        log.info("[Order] Payment method changed for order {}: {} -> {}", id, previous, newMethod);
+        return toResponse(saved);
+    }
+
     // Gives back the stock reserved at createOrder time. Shared by both
     // cancelOrder (customer-initiated) and updateOrderStatus (staff-initiated
     // cancel), and reusable later by a stale-order expiry job — same

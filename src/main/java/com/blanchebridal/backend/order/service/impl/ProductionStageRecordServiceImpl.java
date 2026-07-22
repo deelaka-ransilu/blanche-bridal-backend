@@ -1,5 +1,7 @@
 package com.blanchebridal.backend.order.service.impl;
 
+import com.blanchebridal.backend.appointment.entity.CustomDesignRequest;
+import com.blanchebridal.backend.appointment.repository.CustomDesignRequestRepository;
 import com.blanchebridal.backend.exception.ConflictException;
 import com.blanchebridal.backend.exception.ResourceNotFoundException;
 import com.blanchebridal.backend.exception.UnauthorizedException;
@@ -9,10 +11,12 @@ import com.blanchebridal.backend.order.entity.*;
 import com.blanchebridal.backend.order.repository.OrderRepository;
 import com.blanchebridal.backend.order.repository.ProductionStageRecordRepository;
 import com.blanchebridal.backend.order.service.ProductionStageRecordService;
+import com.blanchebridal.backend.shared.email.EmailService;
 import com.blanchebridal.backend.user.entity.User;
 import com.blanchebridal.backend.user.entity.UserRole;
 import com.blanchebridal.backend.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +24,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -28,6 +33,8 @@ public class ProductionStageRecordServiceImpl implements ProductionStageRecordSe
     private final ProductionStageRecordRepository recordRepository;
     private final OrderRepository orderRepository;
     private final UserRepository userRepository;
+    private final EmailService emailService;
+    private final CustomDesignRequestRepository customDesignRequestRepository;
 
     @Override
     public ProductionStageRecordResponse createRecord(UUID orderId, CreateProductionRecordRequest req, UUID adminId) {
@@ -63,7 +70,14 @@ public class ProductionStageRecordServiceImpl implements ProductionStageRecordSe
         if (req.getNotes() != null) {
             record.setNotes(req.getNotes());
         }
-        return toResponse(recordRepository.save(record));
+        ProductionStageRecord saved = recordRepository.save(record);
+
+        // Fire stage-change emails for custom orders only
+        if (Boolean.TRUE.equals(saved.getOrder().getIsCustomOrder())) {
+            fireStageEmail(saved.getOrder(), req.getStage());
+        }
+
+        return toResponse(saved);
     }
 
     @Override
@@ -97,11 +111,19 @@ public class ProductionStageRecordServiceImpl implements ProductionStageRecordSe
         User admin = userRepository.findById(adminId)
                 .orElseThrow(() -> new ResourceNotFoundException("Admin not found"));
 
-        record.setCurrentStage(record.getPendingStage());
+        ProductionStage approvedStage = record.getPendingStage();
+        record.setCurrentStage(approvedStage);
         record.setPendingStage(null);
         record.setStatus(ProductionStatus.APPROVED);
         record.setReviewedBy(admin);
-        return toResponse(recordRepository.save(record));
+        ProductionStageRecord saved = recordRepository.save(record);
+
+        // Fire stage-change emails for custom orders only
+        if (Boolean.TRUE.equals(saved.getOrder().getIsCustomOrder())) {
+            fireStageEmail(saved.getOrder(), approvedStage);
+        }
+
+        return toResponse(saved);
     }
 
     @Override
@@ -154,6 +176,24 @@ public class ProductionStageRecordServiceImpl implements ProductionStageRecordSe
     }
 
     // --- helpers ---
+
+    private void fireStageEmail(Order order, ProductionStage stage) {
+        // Look up the CustomDesignRequest via the first-payment order FK
+        // to get the customDesignRequestId for the email link.
+        customDesignRequestRepository.findByFirstPaymentOrder_Id(order.getId()).ifPresentOrElse(cdr -> {
+            String toEmail = order.getUser().getEmail();
+            String customerName = order.getUser().getFirstName() + " " + order.getUser().getLastName();
+            UUID cdrId = cdr.getId();
+
+            if (stage == ProductionStage.FITTING_ADJUSTMENT) {
+                emailService.sendCustomDressFittingReadyEmail(toEmail, customerName, cdrId);
+                log.info("[ProductionStage] Fitting-ready email sent for order {}", order.getId());
+            } else if (stage == ProductionStage.READY_FOR_PICKUP) {
+                emailService.sendCustomDressReadyForPickupEmail(toEmail, customerName, cdrId);
+                log.info("[ProductionStage] Ready-for-pickup email sent for order {}", order.getId());
+            }
+        }, () -> log.warn("[ProductionStage] No CustomDesignRequest found for custom order {} — skipping stage email", order.getId()));
+    }
 
     private ProductionStageRecord getRecordOrThrow(UUID orderId) {
         return recordRepository.findByOrderId(orderId)
