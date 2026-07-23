@@ -425,18 +425,11 @@ public class AppointmentServiceImpl implements AppointmentService {
         User customer = userRepository.findById(req.getCustomerId())
                 .orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
 
-        // Same lead-time / slot checks as bookAppointment — staff booking on
-        // behalf of a walk-in customer is still subject to the same slot
-        // rules as customer self-service, just without the JWT-derived user.
-        ZonedDateTime nowColombo = ZonedDateTime.now(COLOMBO);
-        ZonedDateTime requestedDateTime = req.getAppointmentDate()
-                .atTime(LocalTime.parse(req.getTimeSlot()))
-                .atZone(COLOMBO);
-
-        if (requestedDateTime.isBefore(nowColombo.plusMinutes(MIN_LEAD_MINUTES))) {
-            throw new IllegalStateException(
-                    "Cannot book a slot in the past or with less than "
-                            + MIN_LEAD_MINUTES + " minutes' notice");
+        // Walk-in bookings are made by staff with the customer physically
+        // present, so the 60-minute self-service lead-time rule doesn't apply
+        // here — only a bare "not in the past" check remains.
+        if (req.getAppointmentDate().isBefore(LocalDate.now())) {
+            throw new IllegalStateException("Cannot book a slot in the past");
         }
 
         boolean slotTaken = appointmentRepository
