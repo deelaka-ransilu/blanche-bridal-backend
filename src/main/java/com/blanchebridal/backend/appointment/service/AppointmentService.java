@@ -1,6 +1,7 @@
 package com.blanchebridal.backend.appointment.service;
 
 import com.blanchebridal.backend.appointment.dto.req.CreateAppointmentRequest;
+import com.blanchebridal.backend.appointment.dto.req.CreateCustomDesignWalkInRequest;
 import com.blanchebridal.backend.appointment.dto.req.RescheduleAppointmentRequest;
 import com.blanchebridal.backend.appointment.dto.res.AppointmentResponse;
 import com.blanchebridal.backend.appointment.dto.res.CustomDesignRequestResponse;
@@ -29,4 +30,6 @@ public interface AppointmentService {
     // AppointmentService.java — add
     List<CustomOrderSummaryResponse> getAllCustomOrders();
     List<CustomOrderSummaryResponse> getMyCustomOrders(UUID userId);
+
+    AppointmentResponse bookWalkInCustomDesignRequest(CreateCustomDesignWalkInRequest req, UUID callerId, String role);
 }

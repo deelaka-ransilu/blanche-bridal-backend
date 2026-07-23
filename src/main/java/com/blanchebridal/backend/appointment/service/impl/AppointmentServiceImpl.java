@@ -1,6 +1,7 @@
 package com.blanchebridal.backend.appointment.service.impl;
 
 import com.blanchebridal.backend.appointment.dto.req.CreateAppointmentRequest;
+import com.blanchebridal.backend.appointment.dto.req.CreateCustomDesignWalkInRequest;
 import com.blanchebridal.backend.appointment.dto.req.RescheduleAppointmentRequest;
 import com.blanchebridal.backend.appointment.dto.res.AppointmentResponse;
 import com.blanchebridal.backend.appointment.dto.res.CustomDesignRequestResponse;
@@ -411,6 +412,78 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .toList();
     }
 
+    @Override
+    @Transactional
+    public AppointmentResponse bookWalkInCustomDesignRequest(
+            CreateCustomDesignWalkInRequest req, UUID callerId, String role) {
+
+        boolean isStaff = role != null && (role.equals("ROLE_ADMIN") || role.equals("ADMIN"));
+        if (!isStaff) {
+            throw new IllegalStateException("Walk-in custom design requests can only be created by staff");
+        }
+
+        User customer = userRepository.findById(req.getCustomerId())
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found"));
+
+        // Same lead-time / slot checks as bookAppointment — staff booking on
+        // behalf of a walk-in customer is still subject to the same slot
+        // rules as customer self-service, just without the JWT-derived user.
+        ZonedDateTime nowColombo = ZonedDateTime.now(COLOMBO);
+        ZonedDateTime requestedDateTime = req.getAppointmentDate()
+                .atTime(LocalTime.parse(req.getTimeSlot()))
+                .atZone(COLOMBO);
+
+        if (requestedDateTime.isBefore(nowColombo.plusMinutes(MIN_LEAD_MINUTES))) {
+            throw new IllegalStateException(
+                    "Cannot book a slot in the past or with less than "
+                            + MIN_LEAD_MINUTES + " minutes' notice");
+        }
+
+        boolean slotTaken = appointmentRepository
+                .existsByAppointmentDateAndTimeSlotAndStatusNot(
+                        req.getAppointmentDate(), req.getTimeSlot(), AppointmentStatus.CANCELLED);
+        if (slotTaken) {
+            throw new IllegalStateException(
+                    "Time slot " + req.getTimeSlot() + " on " + req.getAppointmentDate()
+                            + " is no longer available");
+        }
+
+        if (req.getOccasionDate().isBefore(LocalDate.now())) {
+            throw new IllegalArgumentException("Occasion date cannot be in the past");
+        }
+        if (!req.getOccasionDate().isAfter(req.getAppointmentDate())) {
+            throw new IllegalArgumentException("Occasion date must be after the consultation date");
+        }
+
+        Appointment appointment = Appointment.builder()
+                .user(customer)
+                .appointmentDate(req.getAppointmentDate())
+                .timeSlot(req.getTimeSlot())
+                .type(AppointmentType.CUSTOM_CONSULTATION)
+                .notes(req.getNotes())
+                // Walk-in consultations are already happening in person right
+                // now — no need for the admin to separately confirm a slot
+                // the customer is sitting in front of them for.
+                .status(AppointmentStatus.CONFIRMED)
+                .build();
+
+        Appointment savedAppointment = appointmentRepository.save(appointment);
+
+        CustomDesignRequest customDesignRequest = CustomDesignRequest.builder()
+                .appointment(savedAppointment)
+                .occasionType(req.getOccasionType())
+                .occasionDate(req.getOccasionDate())
+                .stylePreferences(req.getStylePreferences())
+                .referenceImages(writeImagesAsJson(req.getReferenceImages()))
+                .build();
+        customDesignRequestRepository.save(customDesignRequest);
+
+        log.info("[Appointment] Walk-in custom design request created — appointment {}, customer {}, "
+                + "created by {}", savedAppointment.getId(), customer.getId(), callerId);
+
+        return toResponse(savedAppointment);
+    }
+
     private CustomOrderSummaryResponse toCustomOrderSummary(CustomDesignRequest cdr) {
         Order firstOrder = cdr.getFirstPaymentOrder();
 
@@ -526,6 +599,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (appointment.getType() == AppointmentType.CUSTOM_CONSULTATION) {
             customDesignRequestRepository.findByAppointment_Id(appointment.getId())
                     .ifPresent(cdr -> builder
+                            .customDesignRequestId(cdr.getId())   // ← NEW
                             .occasionType(cdr.getOccasionType())
                             .occasionDate(cdr.getOccasionDate())
                             .stylePreferences(cdr.getStylePreferences())

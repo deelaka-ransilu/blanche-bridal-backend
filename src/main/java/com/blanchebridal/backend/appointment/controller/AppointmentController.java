@@ -1,6 +1,7 @@
 package com.blanchebridal.backend.appointment.controller;
 
 import com.blanchebridal.backend.appointment.dto.req.CreateAppointmentRequest;
+import com.blanchebridal.backend.appointment.dto.req.CreateCustomDesignWalkInRequest;
 import com.blanchebridal.backend.appointment.dto.req.RescheduleAppointmentRequest;
 import com.blanchebridal.backend.appointment.entity.AppointmentStatus;
 import com.blanchebridal.backend.appointment.service.AppointmentService;
@@ -172,6 +173,22 @@ public class AppointmentController {
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "data", appointmentService.completeAppointment(id)
+        ));
+    }
+
+    @PostMapping("/walk-in")
+    @PreAuthorize("hasAnyRole('ADMIN')")
+    public ResponseEntity<Map<String, Object>> bookWalkInCustomDesignRequest(
+            @RequestHeader("Authorization") String authHeader,
+            @Valid @RequestBody CreateCustomDesignWalkInRequest request) {
+
+        UUID callerId = extractUserId(authHeader);
+        String role = extractRole();
+        log.info("[Appointment] Walk-in custom design request — caller: {}, role: {}, customer: {}",
+                callerId, role, request.getCustomerId());
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "data", appointmentService.bookWalkInCustomDesignRequest(request, callerId, role)
         ));
     }
 

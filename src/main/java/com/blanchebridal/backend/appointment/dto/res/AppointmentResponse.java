@@ -35,6 +35,7 @@ public class AppointmentResponse {
     // are null for FITTING/RENTAL_PICKUP/PURCHASE appointments and
     // populated only when type == CUSTOM_CONSULTATION.
 
+    private UUID customDesignRequestId;
     private OccasionType occasionType;
     private LocalDate occasionDate;
     private String stylePreferences;
