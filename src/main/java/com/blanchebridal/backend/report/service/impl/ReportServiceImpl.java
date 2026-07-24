@@ -64,16 +64,21 @@ public class ReportServiceImpl implements ReportService {
         Map<YearMonth, List<Order>> byMonth = completedOrders.stream()
                 .collect(Collectors.groupingBy(o -> YearMonth.from(o.getCreatedAt())));
 
-        return byMonth.entrySet().stream()
-                .map(e -> RevenueReportItem.builder()
-                        .month(e.getKey().toString())
-                        .totalRevenue(e.getValue().stream()
-                                .map(Order::getTotalAmount)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add))
-                        .orderCount(e.getValue().size())
-                        .build())
-                .sorted(Comparator.comparing(RevenueReportItem::getMonth))
-                .toList();
+        YearMonth start = YearMonth.from(resolvedFrom);
+        YearMonth end = YearMonth.from(resolvedTo);
+
+        List<RevenueReportItem> result = new java.util.ArrayList<>();
+        for (YearMonth m = start; !m.isAfter(end); m = m.plusMonths(1)) {
+            List<Order> monthOrders = byMonth.getOrDefault(m, List.of());
+            result.add(RevenueReportItem.builder()
+                    .month(m.toString())
+                    .totalRevenue(monthOrders.stream()
+                            .map(Order::getTotalAmount)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add))
+                    .orderCount(monthOrders.size())
+                    .build());
+        }
+        return result;
     }
 
     @Override
