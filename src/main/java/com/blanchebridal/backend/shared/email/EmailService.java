@@ -11,10 +11,6 @@ public interface EmailService {
 
     void sendPasswordResetEmail(String toEmail, String token);
 
-    // Extended with an optional receipt PDF attachment. Kept as the primary
-    // abstract method; the old 5-arg signature becomes a default that
-    // delegates with receiptPdfBytes = null, so any other caller (if one
-    // exists) keeps compiling without changes.
     void sendOrderConfirmationEmail(String toEmail,
                                     String customerName,
                                     String orderId,

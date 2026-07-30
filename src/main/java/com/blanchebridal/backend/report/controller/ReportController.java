@@ -15,10 +15,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
-// URL is under /api/admin/**, already covered by SecurityConfig's blanket
-// hasRole("ADMIN") rule for that prefix -- no SecurityConfig change needed.
-// @PreAuthorize kept anyway for consistency with RefundController's pattern
-// of stacking both.
 @RestController
 @RequestMapping("/api/admin/reports")
 @RequiredArgsConstructor
@@ -27,8 +23,6 @@ public class ReportController {
 
     private final ReportService reportService;
 
-    // from/to are optional; ReportServiceImpl defaults to a trailing-12-month
-    // window when either is omitted (see DEFAULT_MONTHS_BACK).
     @GetMapping("/revenue")
     public ResponseEntity<Map<String, Object>> getRevenue(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,

@@ -105,7 +105,7 @@ public class EmailServiceImpl implements EmailService {
             """.formatted(href, BRAND_COLOR, label);
     }
 
-    /** Outlined pill button — secondary action (e.g. "view receipt"). */
+    /** Outlined pill button — secondary action ("view receipt"). */
     private String outlineButton(String href, String label) {
         return """
             <div style="text-align:center; margin:20px 0;">
@@ -116,7 +116,7 @@ public class EmailServiceImpl implements EmailService {
             """.formatted(href, BRAND_COLOR, BRAND_COLOR, label);
     }
 
-    /** Muted footer note, separated by a hairline — used for fine print. */
+    /** Muted footer note, separated by a hairline for fine print. */
     private String footerNote(String text) {
         return """
             <p style="margin-top:24px; padding-top:20px; border-top:1px solid #f0ebe6; font-size:13px; color:#a8a29a;">
@@ -178,10 +178,6 @@ public class EmailServiceImpl implements EmailService {
                                            List<String> itemSummaries,
                                            byte[] receiptPdfBytes) {
 
-        // Same short-ID convention used everywhere else (frontend does
-        // order.id.slice(0,8).toUpperCase(), and sendOrderCancelledEmail
-        // already does this) — the full UUID has no value to the customer
-        // and looks unpolished in the email body.
         String displayId = orderId.length() >= 8
                 ? orderId.substring(0, 8).toUpperCase()
                 : orderId.toUpperCase();
@@ -516,7 +512,6 @@ public class EmailServiceImpl implements EmailService {
                                     String orderId,
                                     String fulfillmentMethod) {
 
-        // Same short-ID convention as the other order emails.
         String displayId = orderId.length() >= 8
                 ? orderId.substring(0, 8).toUpperCase()
                 : orderId.toUpperCase();
@@ -551,17 +546,13 @@ public class EmailServiceImpl implements EmailService {
     @Override
     public void sendOrderCancelledEmail(String toEmail,
                                         String customerName,
-                                        String fullOrderId,   // full UUID, not truncated
+                                        String fullOrderId,
                                         boolean refundOwed) {
 
-        // Display-only short ID, same truncation style used everywhere else
-        // (frontend does order.id.slice(0,8).toUpperCase() — mirror it here)
         String displayId = fullOrderId.length() >= 8
                 ? fullOrderId.substring(0, 8).toUpperCase()
                 : fullOrderId.toUpperCase();
 
-        // Link must use the FULL id — that's what Next.js route /my/orders/[id]
-        // actually resolves against, not the shortened display version.
         String refundLink = frontendUrl + "/my/orders/" + fullOrderId;
 
         String refundSection = refundOwed
@@ -590,12 +581,6 @@ public class EmailServiceImpl implements EmailService {
                 wrapEmail("Order Cancelled", body));
     }
 
-    // NOTE: this is the ONLY sendRefundProcessedEmail method — the old
-    // 5-arg version (no proofImageUrl) was deleted. It's no longer part of
-    // the EmailService interface, and leaving it in with @Override would
-    // fail to compile ("does not override or implement a method from a
-    // supertype"). If anything else in the codebase still calls the 5-arg
-    // signature, that call site needs updating to pass proofImageUrl too.
     @Async
     @Override
     public void sendRefundProcessedEmail(String toEmail,
@@ -605,7 +590,6 @@ public class EmailServiceImpl implements EmailService {
                                          String reason,
                                          String proofImageUrl) {
 
-        // Same short-ID convention as the other order emails.
         String displayId = orderId.length() >= 8
                 ? orderId.substring(0, 8).toUpperCase()
                 : orderId.toUpperCase();

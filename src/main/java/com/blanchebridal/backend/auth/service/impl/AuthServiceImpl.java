@@ -74,7 +74,6 @@ public class AuthServiceImpl implements AuthService {
                 .lastName(request.lastName())
                 .phone(request.phone())
                 .role(UserRole.CUSTOMER)
-                // status defaults to PENDING_VERIFICATION via @Builder.Default
                 .build();
 
         userRepository.save(user);
@@ -145,7 +144,6 @@ public class AuthServiceImpl implements AuthService {
                             .lastName(lastName   != null ? lastName  : "")
                             .phone("google_" + googleId)
                             .role(UserRole.CUSTOMER)
-                            // status defaults to PENDING_VERIFICATION
                             .build())
             );
 
@@ -329,7 +327,7 @@ public class AuthServiceImpl implements AuthService {
                 .build();
 
         refreshTokenRepository.save(token);
-        return raw; // return raw to controller — only hash is stored
+        return raw;
     }
 
     private String sha256(String input) {
@@ -341,8 +339,6 @@ public class AuthServiceImpl implements AuthService {
             throw new RuntimeException("SHA-256 not available", e);
         }
     }
-
-    // ── Helpers ──────────────────────────────────────────────────────────────
 
     private String generateSecureToken() {
         byte[] bytes = new byte[32];

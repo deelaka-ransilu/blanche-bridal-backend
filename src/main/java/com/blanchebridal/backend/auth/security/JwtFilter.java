@@ -42,15 +42,6 @@ public class JwtFilter extends OncePerRequestFilter {
 
         String token = authHeader.substring(7);
 
-        // NEW: distinguish expired tokens (→ 401, client should refresh)
-        // from malformed/tampered tokens (→ pass through, SecurityConfig
-        // ultimately rejects with 403 as before). Previously
-        // jwtUtil.validateToken() swallowed ExpiredJwtException and
-        // returned false for everything, so expired and malformed tokens
-        // were indistinguishable — both fell through to an anonymous
-        // principal and eventually a 403 AccessDeniedException, so the
-        // frontend's refresh-on-401 logic never fired. See
-        // CURRENT_STATE.md Issue #8.
         boolean valid;
         boolean expired = false;
         try {
@@ -59,7 +50,6 @@ public class JwtFilter extends OncePerRequestFilter {
             valid = false;
             expired = true;
         } catch (Exception e) {
-            // Malformed, unsupported, bad signature, illegal argument, etc.
             valid = false;
         }
 
@@ -72,8 +62,6 @@ public class JwtFilter extends OncePerRequestFilter {
                         "{\"success\":false,\"message\":\"Token expired\",\"error\":\"TOKEN_EXPIRED\"}");
                 return;
             }
-            // Malformed/tampered token — pass through, SecurityConfig
-            // will reject if the route needs authentication
             filterChain.doFilter(request, response);
             return;
         }

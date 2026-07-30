@@ -31,10 +31,6 @@ public class ReportServiceImpl implements ReportService {
     private final OrderRepository orderRepository;
     private final RefundRepository refundRepository;
 
-    // Default window when from/to aren't supplied: trailing 12 months.
-    // Chosen over "all time" because an unbounded query with no date filter
-    // could pull the entire orders table as the dataset grows -- see
-    // BACKEND_HANDOVER_V2.md's general caution around unscoped list queries.
     private static final int DEFAULT_MONTHS_BACK = 12;
 
     private LocalDateTime startOfDay(LocalDate date) {

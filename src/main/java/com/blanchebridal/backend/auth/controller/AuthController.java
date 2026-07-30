@@ -107,7 +107,6 @@ public class AuthController {
         ));
     }
 
-    // New: refresh endpoint
     @PostMapping("/refresh")
     public ResponseEntity<Map<String, Object>> refresh(
             HttpServletRequest request,
@@ -125,7 +124,6 @@ public class AuthController {
         ));
     }
 
-    // New: logout endpoint
     @PostMapping("/logout")
     public ResponseEntity<Map<String, Object>> logout(
             HttpServletRequest request,
@@ -138,12 +136,12 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("success", true, "message", "Logged out successfully."));
     }
 
-    // ── Cookie helpers ────────────────────────────────────────────────────────
+    // ── helpers ────────────────────────────────────────────────────────
 
     private void setRefreshTokenCookie(HttpServletResponse response, String rawToken) {
         Cookie cookie = new Cookie("refreshToken", rawToken);
-        cookie.setHttpOnly(true);   // JS cannot read this — XSS protection
-        cookie.setSecure(false);    // Set true in production (HTTPS only)
+        cookie.setHttpOnly(true);
+        cookie.setSecure(false);
         cookie.setPath("/");
         cookie.setMaxAge(7 * 24 * 60 * 60); // 7 days in seconds
         response.addCookie(cookie);
@@ -154,7 +152,7 @@ public class AuthController {
         cookie.setHttpOnly(true);
         cookie.setSecure(false);
         cookie.setPath("/");
-        cookie.setMaxAge(0); // delete immediately
+        cookie.setMaxAge(0);
         response.addCookie(cookie);
     }
 

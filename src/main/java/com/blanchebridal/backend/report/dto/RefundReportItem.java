@@ -5,7 +5,6 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 
-// One row per calendar month, for GET /api/admin/reports/refunds
 @Data
 @Builder
 public class RefundReportItem {

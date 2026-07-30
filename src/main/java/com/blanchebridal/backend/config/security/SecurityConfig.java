@@ -33,9 +33,7 @@ public class SecurityConfig {
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Preflight
                         .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
-                        // Public auth endpoints
                         .requestMatchers(
                                 "/api/auth/register",
                                 "/api/auth/login",
@@ -47,7 +45,6 @@ public class SecurityConfig {
                                 "/api/auth/refresh",
                                 "/api/auth/logout"
                         ).permitAll()
-                        // Public catalog (read-only)
                         .requestMatchers(
                                 org.springframework.http.HttpMethod.GET,
                                 "/api/products/**",
@@ -55,19 +52,14 @@ public class SecurityConfig {
                                 "/api/appointments/slots",
                                 "/api/gallery/**"
                         ).permitAll()
-                        // Public contact form submission (guest inquiries)
                         .requestMatchers(
                                 org.springframework.http.HttpMethod.POST,
                                 "/api/inquiries"
                         ).permitAll()
-                        // PayHere webhook — must be public (PayHere calls this server-to-server)
                         .requestMatchers("/api/payments/notify").permitAll()
-                        // Health check
                         .requestMatchers("/actuator/health").permitAll()
-                        // Role-based routes
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/employee/**").hasAnyRole("EMPLOYEE", "ADMIN")
-                        // Everything else requires authentication
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);

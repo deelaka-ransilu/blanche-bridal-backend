@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 @Data
 @Builder
 public class RevenueReportItem {
-    private String month;        // "2026-07" (YearMonth.toString())
+    private String month;
     private BigDecimal totalRevenue;
     private long orderCount;
 }

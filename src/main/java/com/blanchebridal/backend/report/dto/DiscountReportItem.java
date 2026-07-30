@@ -5,14 +5,6 @@ import lombok.Data;
 
 import java.math.BigDecimal;
 
-// One row per calendar month, for GET /api/admin/reports/discounts
-//
-// FIXED and PERCENTAGE discounts are kept as separate fields rather than
-// summed into one "total discount amount" -- Order has no stored pre-discount
-// subtotal, so a PERCENTAGE discount's actual currency value can't be
-// reconstructed here. discountValue for FIXED orders IS a currency amount
-// (safe to sum); discountValue for PERCENTAGE orders is a raw percentage
-// (only safe to average, never sum with currency).
 @Data
 @Builder
 public class DiscountReportItem {
