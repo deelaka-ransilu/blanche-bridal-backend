@@ -74,10 +74,18 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
     // longer blocks the confirm request/response cycle. Runs on a separate
     // thread — can't share the caller's transaction or in-memory entity, so
     // it does its own repository lookup and save once the event is created.
+    //
+    // Uses findByIdWithUserAndProduct (not findById) because buildEvent()
+    // dereferences appointment.getUser() and appointment.getProduct(), both
+    // LAZY. A plain findById() closes its session as soon as it returns, so
+    // those proxies would throw LazyInitializationException ("no session")
+    // the moment buildEvent() touches them on this thread. The fetch-join
+    // pulls user and product into the object graph while the session is
+    // still open, so no further DB access is needed afterward.
     @Async
     @Override
     public void createEventAsync(UUID appointmentId) {
-        appointmentRepository.findById(appointmentId).ifPresent(appointment -> {
+        appointmentRepository.findByIdWithUserAndProduct(appointmentId).ifPresent(appointment -> {
             String eventId = createEvent(appointment);
             if (eventId != null) {
                 appointment.setGoogleEventId(eventId);
@@ -151,7 +159,7 @@ public class GoogleCalendarServiceImpl implements GoogleCalendarService {
     private Event buildEvent(Appointment appointment) {
         String customerName = appointment.getUser() != null
                 ? appointment.getUser().getFirstName() + " "
-                  + appointment.getUser().getLastName()
+                + appointment.getUser().getLastName()
                 : "Customer";
 
         String customerEmail = appointment.getUser() != null

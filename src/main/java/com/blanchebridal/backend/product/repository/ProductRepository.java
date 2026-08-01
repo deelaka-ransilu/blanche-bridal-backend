@@ -23,10 +23,8 @@ public interface ProductRepository extends JpaRepository<Product, UUID>,
 
     // ── NEW ───────────────────────────────────────────────────────────────────
 
-    // Used by getDeletedProducts()
     List<Product> findByIsActiveFalse();
 
-    // Used by restoreProduct()
     Optional<Product> findByIdAndIsActiveFalse(UUID id);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)

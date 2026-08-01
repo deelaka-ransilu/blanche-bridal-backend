@@ -78,8 +78,6 @@ public class ProductServiceImpl implements ProductService {
             throw new ConflictException("A product with this name already exists");
         }
 
-        // categoryId is required — category is what determines whether this
-        // product is sellable (ACCESSORY) or rentable (DRESS).
         Category category = categoryRepository.findByIdAndIsActiveTrue(request.categoryId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Category not found: " + request.categoryId()));
@@ -91,7 +89,7 @@ public class ProductServiceImpl implements ProductService {
                 .name(request.name())
                 .slug(slugify(request.name()))
                 .description(request.description())
-                .type(deriveProductType(category)) // derived from category, never from the request
+                .type(deriveProductType(category))
                 .category(category)
                 .rentalPrice(request.rentalPrice())
                 .rentalPricePerDay(request.rentalPricePerDay())

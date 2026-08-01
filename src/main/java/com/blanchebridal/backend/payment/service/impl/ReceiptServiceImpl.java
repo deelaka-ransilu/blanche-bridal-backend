@@ -107,8 +107,6 @@ public class ReceiptServiceImpl implements ReceiptService {
     @Override
     @Transactional(readOnly = true)
     public String getReceiptPdfUrl(UUID receiptId, UUID requestingUserId, String role) {
-        // Legacy field — only populated on receipts generated before the
-        // switch to DB storage. Will be null for anything generated after.
         return getAuthorizedReceipt(receiptId, requestingUserId, role).getPdfUrl();
     }
 
@@ -119,10 +117,6 @@ public class ReceiptServiceImpl implements ReceiptService {
 
         byte[] pdfData = receipt.getPdfData();
         if (pdfData == null || pdfData.length == 0) {
-            // Covers receipts created before the DB-storage migration whose
-            // only copy lives in Cloudinary — that delivery path is
-            // currently blocked (untrusted free-tier account), so there's
-            // nothing we can serve for these until they're backfilled.
             log.error("No pdf_data stored for receipt {} — likely a pre-migration " +
                     "Cloudinary-only receipt with no local backfill.", receiptId);
             throw new ResourceNotFoundException(

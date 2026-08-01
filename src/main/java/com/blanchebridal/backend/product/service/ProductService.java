@@ -1,6 +1,8 @@
 package com.blanchebridal.backend.product.service;
 
 import com.blanchebridal.backend.product.dto.ProductFilters;
+import com.blanchebridal.backend.product.dto.req.CreateProductRequest;
+import com.blanchebridal.backend.product.dto.req.UpdateProductRequest;
 import com.blanchebridal.backend.product.dto.res.ProductDetailResponse;
 import com.blanchebridal.backend.product.dto.res.ProductSummaryResponse;
 import org.springframework.data.domain.Page;
@@ -17,9 +19,9 @@ public interface ProductService {
 
     ProductDetailResponse getProductBySlug(String slug);
 
-    ProductDetailResponse createProduct(com.blanchebridal.backend.product.dto.req.CreateProductRequest request);
+    ProductDetailResponse createProduct(CreateProductRequest request);
 
-    ProductDetailResponse updateProduct(UUID id, com.blanchebridal.backend.product.dto.req.UpdateProductRequest request);
+    ProductDetailResponse updateProduct(UUID id, UpdateProductRequest request);
 
     void deleteProduct(UUID id);
 

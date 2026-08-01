@@ -10,19 +10,19 @@ public class PayHereUtil {
     @Value("${payhere.secret}")
     private String secret;
 
-    // For payment form initiation
+    // payment initiation
     public String generateHash(String merchantId, String orderId,
                                String amount, String currency) {
-        String upperSecret = DigestUtils.md5Hex(secret).toUpperCase(); // ← no decode
+        String upperSecret = DigestUtils.md5Hex(secret).toUpperCase();
         String raw = merchantId + orderId + amount + currency + upperSecret;
         return DigestUtils.md5Hex(raw).toUpperCase();
     }
 
-    // For webhook notification verification
+    // webhook notification verification
     public String generateNotifyHash(String merchantId, String orderId,
                                      String amount, String currency,
                                      String statusCode) {
-        String upperSecret = DigestUtils.md5Hex(secret).toUpperCase(); // ← no decode
+        String upperSecret = DigestUtils.md5Hex(secret).toUpperCase();
         String raw = merchantId + orderId + amount + currency + statusCode + upperSecret;
         return DigestUtils.md5Hex(raw).toUpperCase();
     }

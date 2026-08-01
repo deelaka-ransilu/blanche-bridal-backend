@@ -41,8 +41,6 @@ public class ProductController {
     private final JwtUtil jwtUtil;
     private final Cloudinary cloudinary;
 
-    // ── Public ────────────────────────────────────────────────────────────────
-
     @GetMapping
     public ResponseEntity<Map<String, Object>> getAll(
             @RequestParam(required = false) ProductType type,
@@ -90,8 +88,6 @@ public class ProductController {
                 "data", productService.getProductBySlug(slug)));
     }
 
-    // ── Admin only ────────────────────────────────────────────────────────────
-
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> create(
@@ -131,7 +127,6 @@ public class ProductController {
                 "data", productService.updateStock(id, quantity)));
     }
 
-    // ── NEW: GET /api/products/deleted ────────────────────────────────────────
     @GetMapping("/deleted")
     @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> getDeleted() {
@@ -140,7 +135,6 @@ public class ProductController {
         return ResponseEntity.ok(Map.of("success", true, "data", deleted));
     }
 
-    // ── NEW: PUT /api/products/{id}/restore ───────────────────────────────────
     @PutMapping("/{id}/restore")
     @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> restore(@PathVariable UUID id) {
@@ -148,8 +142,6 @@ public class ProductController {
         return ResponseEntity.ok(Map.of("success", true,
                 "data", productService.restoreProduct(id)));
     }
-
-    // ── Public: reviews ───────────────────────────────────────────────────────
 
     @GetMapping("/{id}/reviews")
     public ResponseEntity<Map<String, Object>> getReviews(@PathVariable UUID id) {
@@ -180,7 +172,6 @@ public class ProductController {
         return ResponseEntity.ok(Map.of("success", true, "data", "Image removed"));
     }
 
-    // ── Cloudinary signed upload ────────────────────────────────────────────
     @GetMapping("/upload-signature")
     @PreAuthorize("hasAnyRole('ADMIN', 'CUSTOMER')")
     public ResponseEntity<Map<String, Object>> getUploadSignature(
@@ -223,8 +214,6 @@ public class ProductController {
 
         return ResponseEntity.ok(Map.of("success", true, "data", response));
     }
-
-    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private UUID extractUserId(String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
