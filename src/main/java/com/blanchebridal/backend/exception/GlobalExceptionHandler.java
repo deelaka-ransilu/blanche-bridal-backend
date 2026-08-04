@@ -118,4 +118,17 @@ public class GlobalExceptionHandler {
         return buildError("BAD_REQUEST",
                 "Invalid value for parameter: " + ex.getName(), HttpStatus.BAD_REQUEST);
     }
+
+    // HttpMessageNotReadableException — NEW. Thrown when the request body can't be
+    // deserialized into the target DTO — most commonly a malformed JSON literal for a
+    // typed field (e.g. "orderId": "not-a-uuid" where a UUID is expected), or truncated/
+    // invalid JSON altogether. This runs BEFORE @Valid, since the body never successfully
+    // binds to an object in the first place. Previously uncaught here, so it fell through
+    // to the generic Exception handler and returned 500 for what is genuinely bad client
+    // input — same category of bug as the IllegalArgumentException fix above.
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleMessageNotReadable(
+            org.springframework.http.converter.HttpMessageNotReadableException ex) {
+        return buildError("BAD_REQUEST", "Malformed request body", HttpStatus.BAD_REQUEST);
+    }
 }
