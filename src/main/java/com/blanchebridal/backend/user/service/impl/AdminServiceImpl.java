@@ -1,7 +1,9 @@
 package com.blanchebridal.backend.user.service.impl;
 
+import com.blanchebridal.backend.auth.service.AuthService;
 import com.blanchebridal.backend.exception.ConflictException;
 import com.blanchebridal.backend.exception.ResourceNotFoundException;
+import com.blanchebridal.backend.shared.email.EmailService;
 import com.blanchebridal.backend.user.dto.req.CreateUserRequest;
 import com.blanchebridal.backend.user.dto.req.CreateWalkInCustomerRequest;
 import com.blanchebridal.backend.user.dto.req.MeasurementsRequest;
@@ -14,6 +16,7 @@ import com.blanchebridal.backend.user.repository.CustomerMeasurementRepository;
 import com.blanchebridal.backend.user.repository.CustomerProfileRepository;
 import com.blanchebridal.backend.user.repository.UserRepository;
 import com.blanchebridal.backend.user.service.AdminService;
+import com.blanchebridal.backend.auth.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -34,6 +37,8 @@ public class AdminServiceImpl implements AdminService {
     private final CustomerMeasurementRepository measurementRepository;
     private final CustomerProfileRepository profileRepository;
     private final PasswordEncoder passwordEncoder;
+    private final EmailService emailService;
+    private final AuthService authService;
 
     private String generatePublicId() {
         long count = measurementRepository.count() + 1;
@@ -169,9 +174,10 @@ public class AdminServiceImpl implements AdminService {
                 .lastName(request.lastName())
                 .phone(request.phone())
                 .role(UserRole.CUSTOMER)
-                .status(UserStatus.ACTIVE) // Admin vouches — no verification needed
+                .status(UserStatus.PENDING_VERIFICATION)
                 .build();
         User saved = userRepository.save(user);
+        authService.sendVerificationTokenFor(saved);
         CustomerProfile profile = CustomerProfile.builder()
                 .customer(saved)
                 .adminNotes(null)

@@ -77,7 +77,7 @@ public class AuthServiceImpl implements AuthService {
                 .build();
 
         userRepository.save(user);
-        sendVerificationToken(user);
+        sendVerificationTokenFor(user);
         log.info("[Auth] New customer registered: {} <{}>", user.getFirstName(), user.getEmail());
         return new AuthResponse(null, null, null);
     }
@@ -87,9 +87,13 @@ public class AuthServiceImpl implements AuthService {
                 .orElseThrow(() -> new UnauthorizedException("Invalid email or password"));
 
         if (user.getPasswordHash() == null) {
+            if (user.getGoogleId() != null) {
+                throw new UnauthorizedException(
+                        "This account was created with Google. Please sign in with Google, " +
+                                "or use 'Forgot Password' to set a password.");
+            }
             throw new UnauthorizedException(
-                    "This account was created with Google. Please sign in with Google, " +
-                            "or use 'Forgot Password' to set a password.");
+                    "This account doesn't have a password set yet. Please use 'Forgot Password' to set one.");
         }
 
         if (user.isPendingVerification()) {
@@ -153,7 +157,7 @@ public class AuthServiceImpl implements AuthService {
             }
 
             if (isNewUser) {
-                sendVerificationToken(user);
+                sendVerificationTokenFor(user);
                 log.info("[Auth] New Google account registered: {} <{}>", user.getFirstName(), email);
                 return new AuthResponse(null, null, null);
             }
@@ -215,7 +219,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         tokenRepository.deleteAllByUserAndType(user, VerificationTokenType.EMAIL_VERIFY);
-        sendVerificationToken(user);
+        sendVerificationTokenFor(user);
         log.info("[Auth] Verification email resent to {}", email);
     }
 
@@ -346,7 +350,8 @@ public class AuthServiceImpl implements AuthService {
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 
-    private void sendVerificationToken(User user) {
+    @Override
+    public void sendVerificationTokenFor(User user) {
         String tokenString = generateSecureToken();
         VerificationToken vToken = VerificationToken.builder()
                 .user(user)
