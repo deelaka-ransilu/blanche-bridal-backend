@@ -155,7 +155,7 @@ public class OrderServiceImpl implements OrderService {
                     : BigDecimal.ZERO;
 
             String imageUrl = (product.getImages() != null && !product.getImages().isEmpty())
-                    ? product.getImages().get(0).getUrl() // ⚠ confirm actual getter on ProductImage
+                    ? product.getImages().get(0).getUrl()
                     : null;
 
             OrderItem item = OrderItem.builder()
