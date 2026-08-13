@@ -1,6 +1,7 @@
 package com.blanchebridal.backend.shared.email;
 
 import com.blanchebridal.backend.order.dto.res.CustomQuoteResponse;
+import com.blanchebridal.backend.payment.entity.PaymentMethod;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
@@ -387,6 +388,42 @@ public class EmailServiceImpl implements EmailService {
 
         sendHtmlEmail(toEmail, "Action required: Rental return overdue",
                 wrapEmail("Rental Return Overdue", body));
+    }
+
+    @Async
+    @Override
+    public void sendRentalBookingCreatedEmail(String toEmail,
+                                              String customerName,
+                                              String productName,
+                                              LocalDate rentalStart,
+                                              LocalDate rentalEnd,
+                                              BigDecimal rentalFee,
+                                              com.blanchebridal.backend.payment.entity.PaymentMethod paymentMethod) {
+
+        String startStr = rentalStart.format(DATE_FORMAT);
+        String endStr = rentalEnd.format(DATE_FORMAT);
+
+        String paymentNote = paymentMethod == com.blanchebridal.backend.payment.entity.PaymentMethod.PAYHERE
+                ? "Please complete payment online to confirm your booking."
+                : "Payment is due in person — our team will confirm the details with you.";
+
+        String body = """
+            <p>Dear %s,</p>
+            <p>Your rental booking has been created. Here are the details:</p>
+            %s
+            <p>%s</p>
+            """.formatted(
+                escapeHtml(customerName),
+                infoBox("""
+                    <p style="margin:0 0 8px 0;"><strong>Item:</strong> %s</p>
+                    <p style="margin:0 0 8px 0;"><strong>Rental period:</strong> %s – %s</p>
+                    <p style="margin:0;"><strong>Rental fee:</strong> LKR %s</p>
+                    """.formatted(escapeHtml(productName), startStr, endStr, rentalFee)),
+                paymentNote
+        );
+
+        sendHtmlEmail(toEmail, "Your Blanche Bridal rental booking is confirmed",
+                wrapEmail("Rental Booking Created", body));
     }
 
     @Async

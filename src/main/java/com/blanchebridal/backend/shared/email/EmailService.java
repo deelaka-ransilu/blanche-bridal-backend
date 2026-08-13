@@ -1,5 +1,7 @@
 package com.blanchebridal.backend.shared.email;
 
+import com.blanchebridal.backend.payment.entity.PaymentMethod;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -70,6 +72,14 @@ public interface EmailService {
                                 String productName,
                                 LocalDate rentalEnd,
                                 BigDecimal balanceDue);
+
+    void sendRentalBookingCreatedEmail(String toEmail,
+                                       String customerName,
+                                       String productName,
+                                       java.time.LocalDate rentalStart,
+                                       java.time.LocalDate rentalEnd,
+                                       java.math.BigDecimal rentalFee,
+                                       com.blanchebridal.backend.payment.entity.PaymentMethod paymentMethod);
 
     void sendAdminWelcomeEmail(String toEmail,
                                String firstName,

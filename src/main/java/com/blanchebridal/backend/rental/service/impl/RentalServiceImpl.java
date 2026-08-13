@@ -684,6 +684,21 @@ public class RentalServiceImpl implements RentalService {
                         + "(created by {}) — fee LKR {}",
                 savedOrder.getId(), product.getId(), customer.getId(), callerId, fee);
 
+        try {
+            emailService.sendRentalBookingCreatedEmail(
+                    customer.getEmail(),
+                    customer.getFirstName() + " " + customer.getLastName(),
+                    product.getName(),
+                    req.getRentalStart(),
+                    req.getRentalEnd(),
+                    fee,
+                    req.getPaymentMethod()
+            );
+        } catch (Exception e) {
+            log.warn("Failed to send rental-booking-created email for order {}: {}",
+                    savedOrder.getId(), e.getMessage());
+        }
+
         return toResponse(savedOrder);
     }
 
