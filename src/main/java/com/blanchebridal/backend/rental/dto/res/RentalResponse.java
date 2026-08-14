@@ -26,7 +26,8 @@ public class RentalResponse {
     private UUID orderId;          // ADVANCE: first (50%) payment. SAME_DAY: the only payment.
     private UUID handoverOrderId;  // ADVANCE only — second (remaining 50%) payment.
 
-    private PaymentMethod paymentMethod;
+    private PaymentMethod paymentMethod;          // first/booking order's payment method
+    private PaymentMethod handoverPaymentMethod;   // handover order's payment method (ADVANCE only)
     private RentalBookingPath bookingPath;
 
     private LocalDate rentalStart;

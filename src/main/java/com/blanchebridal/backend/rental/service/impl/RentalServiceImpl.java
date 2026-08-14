@@ -734,6 +734,7 @@ public class RentalServiceImpl implements RentalService {
                 .customerEmail(customerEmail)
                 .orderId(rental.getOrder() != null ? rental.getOrder().getId() : null)
                 .paymentMethod(rental.getOrder() != null ? rental.getOrder().getPaymentMethod() : null)
+                .handoverPaymentMethod(rental.getHandoverOrder() != null ? rental.getHandoverOrder().getPaymentMethod() : null)
                 .bookingPath(rental.getBookingPath())
                 .handoverOrderId(rental.getHandoverOrder() != null ? rental.getHandoverOrder().getId() : null)
                 .rentalStart(rental.getRentalStart())
