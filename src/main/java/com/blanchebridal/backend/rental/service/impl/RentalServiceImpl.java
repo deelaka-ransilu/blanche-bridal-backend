@@ -19,6 +19,7 @@ import com.blanchebridal.backend.order.entity.OrderItem;
 import com.blanchebridal.backend.order.entity.OrderMode;
 import com.blanchebridal.backend.order.entity.OrderStatus;
 import com.blanchebridal.backend.product.entity.Product;
+import com.blanchebridal.backend.product.entity.ProductImage;
 import com.blanchebridal.backend.product.repository.ProductRepository;
 import com.blanchebridal.backend.rental.dto.res.RentalResponse;
 import com.blanchebridal.backend.rental.entity.Rental;
@@ -126,7 +127,7 @@ public class RentalServiceImpl implements RentalService {
             throw new IllegalStateException("Product is not available: " + product.getName());
         }
 
-        if (product.getRentalPrice() == null && product.getRentalPricePerDay() == null) {
+        if (product.getRentalPrice() == null) {
             throw new IllegalStateException("Product is not available for rental: " + product.getName());
         }
 
@@ -179,9 +180,7 @@ public class RentalServiceImpl implements RentalService {
                 .build();
         Appointment savedAppointment = appointmentRepository.save(fittingAppointment);
 
-        String imageUrl = (product.getImages() != null && !product.getImages().isEmpty())
-                ? product.getImages().get(0).getUrl()
-                : null;
+        String imageUrl = firstActiveImageUrl(product);
 
         OrderItem item = OrderItem.builder()
                 .product(product)
@@ -261,9 +260,7 @@ public class RentalServiceImpl implements RentalService {
                 .multiply(INSTALLMENT_RATE).setScale(2, RoundingMode.HALF_UP);
 
         Product product = rental.getProduct();
-        String imageUrl = (product != null && product.getImages() != null && !product.getImages().isEmpty())
-                ? product.getImages().get(0).getUrl()
-                : null;
+        String imageUrl = firstActiveImageUrl(product);
 
         String size = null;
         if (rental.getOrder() != null
@@ -470,12 +467,6 @@ public class RentalServiceImpl implements RentalService {
                 User customer = rental.getUser();
                 Product product = rental.getProduct();
                 if (customer != null && product != null) {
-                    // NOTE: sendRentalOverdueEmail's signature still takes a
-                    // balanceDue-shaped BigDecimal — pass dressValue for now
-                    // as a stand-in "amount at stake" figure. Revisit this
-                    // email template/signature in Step 9 alongside the
-                    // frontend rewrite; it's cosmetic only, not part of the
-                    // payment logic.
                     emailService.sendRentalOverdueEmail(
                             customer.getEmail(),
                             customer.getFirstName() + " " + customer.getLastName(),
@@ -611,9 +602,7 @@ public class RentalServiceImpl implements RentalService {
                 ? dressValue
                 : dressValue.multiply(INSTALLMENT_RATE).setScale(2, RoundingMode.HALF_UP);
 
-        String imageUrl = (product.getImages() != null && !product.getImages().isEmpty())
-                ? product.getImages().get(0).getUrl()
-                : null;
+        String imageUrl = firstActiveImageUrl(product);
 
         String label = req.getBookingPath() == RentalBookingPath.SAME_DAY
                 ? product.getName() + " — rental (full dress value, same-day pickup)"
@@ -702,33 +691,31 @@ public class RentalServiceImpl implements RentalService {
                 .toList();
     }
 
-    // ─── Helpers ───────────────────────────────────────────────────────────────
+    // ─── Helpers ───────────────────────────────────────────────────────────────\
 
-    // Per-day pricing takes priority when set on the product; otherwise falls
-    // back to the flat one-time rentalPrice fee. This is the SHOP'S EARNED
-    // rental fee — separate from dressValue, the deposit-sized replacement
-    // cost. Unchanged from the old model.
+    // This is the SHOP'S EARNED rental fee — separate from dressValue, the
+    // deposit-sized replacement cost.
     private BigDecimal computeRentalFee(Product product, LocalDate start, LocalDate end) {
-        BigDecimal fee;
-        if (product.getRentalPricePerDay() != null) {
-            long days = ChronoUnit.DAYS.between(start, end);
-            fee = product.getRentalPricePerDay().multiply(BigDecimal.valueOf(days));
-        } else {
-            fee = product.getRentalPrice() != null ? product.getRentalPrice() : BigDecimal.ZERO;
-        }
+        BigDecimal fee = product.getRentalPrice() != null ? product.getRentalPrice() : BigDecimal.ZERO;
         return fee.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    // Deleted images stay soft-deleted (isActive = false) in the collection —
+    // never treat getImages().get(0) as "the first image" without filtering.
+    private String firstActiveImageUrl(Product product) {
+        if (product == null || product.getImages() == null) return null;
+        return product.getImages().stream()
+                .filter(i -> Boolean.TRUE.equals(i.getIsActive()))
+                .findFirst()
+                .map(ProductImage::getUrl)
+                .orElse(null);
     }
 
     // ─── Mapper ───────────────────────────────────────────────────────────────
 
     private RentalResponse toResponse(Rental rental) {
         String productName = rental.getProduct() != null ? rental.getProduct().getName() : null;
-        String productImage = null;
-        if (rental.getProduct() != null &&
-                rental.getProduct().getImages() != null &&
-                !rental.getProduct().getImages().isEmpty()) {
-            productImage = rental.getProduct().getImages().get(0).getUrl();
-        }
+        String productImage = firstActiveImageUrl(rental.getProduct());
 
         String customerName = null;
         String customerEmail = null;
@@ -774,12 +761,9 @@ public class RentalServiceImpl implements RentalService {
                 .name(p.getName())
                 .type(p.getType())
                 .rentalPrice(p.getRentalPrice())
-                .rentalPricePerDay(p.getRentalPricePerDay())
                 .dressValue(p.getDressValue())
                 .categoryName(p.getCategory() != null ? p.getCategory().getName() : null)
-                .firstImageUrl((p.getImages() != null && !p.getImages().isEmpty())
-                        ? p.getImages().get(0).getUrl()
-                        : null)
+                .firstImageUrl(firstActiveImageUrl(p))
                 .build();
     }
 

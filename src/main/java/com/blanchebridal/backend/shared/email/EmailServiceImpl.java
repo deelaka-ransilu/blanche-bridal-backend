@@ -366,24 +366,24 @@ public class EmailServiceImpl implements EmailService {
                                        String customerName,
                                        String productName,
                                        LocalDate rentalEnd,
-                                       BigDecimal balanceDue) {
+                                       BigDecimal depositHeld) {
 
         String dateStr = rentalEnd.format(DATE_FORMAT);
 
-        String balanceLine = (balanceDue != null && balanceDue.compareTo(BigDecimal.ZERO) > 0)
-                ? "<p style=\"font-size:17px; color:%s; font-weight:bold;\">Outstanding balance: LKR %s</p>".formatted(BRAND_COLOR, balanceDue)
+        String depositLine = (depositHeld != null && depositHeld.compareTo(BigDecimal.ZERO) > 0)
+                ? "<p style=\"font-size:17px; color:%s; font-weight:bold;\">Deposit on hold: LKR %s</p><p style=\"font-size:13px; color:#a8a29a; margin-top:-8px;\">This will be refunded (minus any applicable late fees) once the dress is returned.</p>".formatted(BRAND_COLOR, depositHeld)
                 : "";
 
         String body = """
-                <p>Dear %s,</p>
-                <p>Your rental of <strong>%s</strong> was due for return on <strong>%s</strong>.</p>
-                %s
-                <p>Please return the item as soon as possible or contact us to arrange.</p>
-                """.formatted(
+            <p>Dear %s,</p>
+            <p>Your rental of <strong>%s</strong> was due for return on <strong>%s</strong>.</p>
+            %s
+            <p>Please return the item as soon as possible or contact us to arrange.</p>
+            """.formatted(
                 escapeHtml(customerName),
                 escapeHtml(productName),
                 escapeHtml(dateStr),
-                balanceLine
+                depositLine
         );
 
         sendHtmlEmail(toEmail, "Action required: Rental return overdue",

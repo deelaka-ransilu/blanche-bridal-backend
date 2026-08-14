@@ -71,7 +71,7 @@ public interface EmailService {
                                 String customerName,
                                 String productName,
                                 LocalDate rentalEnd,
-                                BigDecimal balanceDue);
+                                BigDecimal depositHeld);
 
     void sendRentalBookingCreatedEmail(String toEmail,
                                        String customerName,

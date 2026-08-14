@@ -40,14 +40,12 @@ public class Product {
     @EqualsAndHashCode.Exclude
     private Category category;
 
-    // Flat one-time rental fee. Used as a fallback when
-    // rentalPricePerDay is not set (see RentalServiceImpl.bookRental).
+    // Flat one-time rental fee.
     @Column(name = "rental_price", precision = 10, scale = 2)
     private BigDecimal rentalPrice;
 
-    // Optional per-day rate. When set, the rental fee at booking time is
-    // this rate multiplied by the number of days between rentalStart and
-    // rentalEnd, instead of the flat rentalPrice.
+    // Dormant — column kept in schema but no longer read/written by the app.
+    // See handover doc: flat rentalPrice only, decided against per-day pricing.
     @Column(name = "rental_price_per_day", precision = 10, scale = 2)
     private BigDecimal rentalPricePerDay;
 

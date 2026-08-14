@@ -35,8 +35,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -83,8 +85,7 @@ public class ProductServiceImpl implements ProductService {
                         "Category not found: " + request.categoryId()));
 
         validateCategoryProductTypeMatch(
-                category, request.purchasePrice(), request.rentalPrice(), request.rentalPricePerDay(),
-                request.dressValue());
+                category, request.purchasePrice(), request.rentalPrice(), request.dressValue());
 
         Product product = Product.builder()
                 .name(request.name())
@@ -93,7 +94,6 @@ public class ProductServiceImpl implements ProductService {
                 .type(deriveProductType(category))
                 .category(category)
                 .rentalPrice(request.rentalPrice())
-                .rentalPricePerDay(request.rentalPricePerDay())
                 .dressValue(request.dressValue())
                 .purchasePrice(request.purchasePrice())
                 .stock(request.stock())
@@ -141,25 +141,33 @@ public class ProductServiceImpl implements ProductService {
                 ? request.purchasePrice() : product.getPurchasePrice();
         BigDecimal rentalPrice = request.rentalPrice() != null
                 ? request.rentalPrice() : product.getRentalPrice();
-        BigDecimal rentalPricePerDay = request.rentalPricePerDay() != null
-                ? request.rentalPricePerDay() : product.getRentalPricePerDay();
         BigDecimal dressValue = request.dressValue() != null
                 ? request.dressValue() : product.getDressValue();
 
-        validateCategoryProductTypeMatch(category, purchasePrice, rentalPrice, rentalPricePerDay, dressValue);
+        validateCategoryProductTypeMatch(category, purchasePrice, rentalPrice, dressValue);
 
         product.setCategory(category);
         product.setType(deriveProductType(category));
         product.setPurchasePrice(purchasePrice);
         product.setRentalPrice(rentalPrice);
-        product.setRentalPricePerDay(rentalPricePerDay);
         product.setDressValue(dressValue);
 
         if (request.images() != null) {
-            // Clean up old images from Cloudinary before replacing
-            product.getImages().forEach(this::destroyOnCloudinaryQuietly);
-            product.getImages().clear();
-            attachImages(product, request.images());
+            // Only append genuinely new images. Deletions of existing images
+            // happen immediately via the dedicated deleteProductImage
+            // endpoint (called from the frontend the moment the admin clicks
+            // ×) — this block must never re-touch, re-destroy, or re-create
+            // ProductImage rows for images that are already there.
+            Set<String> existingActiveUrls = product.getImages().stream()
+                    .filter(img -> Boolean.TRUE.equals(img.getIsActive()))
+                    .map(ProductImage::getUrl)
+                    .collect(Collectors.toSet());
+
+            List<ProductImageInput> newOnly = request.images().stream()
+                    .filter(img -> !existingActiveUrls.contains(img.url()))
+                    .toList();
+
+            attachImages(product, newOnly);
         }
 
         return toDetail(productRepository.save(product));
@@ -235,19 +243,15 @@ public class ProductServiceImpl implements ProductService {
     }
 
     // ACCESSORY categories: purchase-only, no rental pricing allowed.
-    // DRESS categories: rental-only (flat and/or per-day), no purchase price.
-    // "Rentable" counts as either rentalPrice or rentalPricePerDay being set,
-    // since RentalServiceImpl treats rentalPricePerDay as valid rentable
-    // state on its own (used instead of the flat rentalPrice when present).
+    // DRESS categories: rental-only (flat rental price), no purchase price.
     private void validateCategoryProductTypeMatch(
             Category category,
             BigDecimal purchasePrice,
             BigDecimal rentalPrice,
-            BigDecimal rentalPricePerDay,
             BigDecimal dressValue
     ) {
         boolean hasPurchase = purchasePrice != null;
-        boolean hasRental = rentalPrice != null || rentalPricePerDay != null;
+        boolean hasRental = rentalPrice != null;
 
         if (category.getType() == CategoryType.ACCESSORY) {
             if (!hasPurchase) {
@@ -258,7 +262,7 @@ public class ProductServiceImpl implements ProductService {
             }
         } else { // DRESS
             if (!hasRental) {
-                throw new ConflictException("Dress products require a rental price or per-day rate");
+                throw new ConflictException("Dress products require a rental price");
             }
             if (hasPurchase) {
                 throw new ConflictException("Dress products cannot have a purchase price");
@@ -323,7 +327,12 @@ public class ProductServiceImpl implements ProductService {
 
     private ProductSummaryResponse toSummary(Product p) {
         String firstImage = (p.getImages() != null && !p.getImages().isEmpty())
-                ? p.getImages().getFirst().getUrl() : null;
+                ? p.getImages().stream()
+                .filter(i -> Boolean.TRUE.equals(i.getIsActive()))
+                .findFirst()
+                .map(ProductImage::getUrl)
+                .orElse(null)
+                : null;
 
         ProductSummaryResponse.CategoryInfo categoryInfo = p.getCategory() != null
                 && Boolean.TRUE.equals(p.getCategory().getIsActive())
@@ -343,6 +352,7 @@ public class ProductServiceImpl implements ProductService {
         List<ProductDetailResponse.ImageInfo> images = p.getImages() == null
                 ? Collections.emptyList()
                 : p.getImages().stream()
+                .filter(i -> Boolean.TRUE.equals(i.getIsActive()))
                 .map(i -> new ProductDetailResponse.ImageInfo(
                         i.getId(), i.getUrl(), i.getDisplayOrder()))
                 .toList();
@@ -355,7 +365,7 @@ public class ProductServiceImpl implements ProductService {
 
         return new ProductDetailResponse(
                 p.getId(), p.getName(), p.getSlug(), p.getDescription(), p.getType(),
-                p.getRentalPrice(), p.getRentalPricePerDay(), p.getDressValue(), p.getPurchasePrice(),
+                p.getRentalPrice(), p.getDressValue(), p.getPurchasePrice(),
                 p.getStock(), p.getIsAvailable(),
                 fromJson(p.getSizes()), images,
                 null, categoryInfo,
