@@ -26,4 +26,6 @@ public interface RentalRepository extends JpaRepository<Rental, UUID> {
     Optional<Rental> findByHandoverOrder_Id(UUID orderId);
 
     List<Rental> findByStatusAndRentalStartLessThanEqual(RentalStatus status, LocalDate date);
+
+    List<Rental> findByProduct_IdAndStatusIn(UUID productId, List<RentalStatus> statuses);
 }

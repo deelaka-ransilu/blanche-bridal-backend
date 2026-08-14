@@ -18,6 +18,7 @@ import com.blanchebridal.backend.payment.service.PaymentService;
 import com.blanchebridal.backend.payment.service.ReceiptService;
 import com.blanchebridal.backend.payment.util.PayHereUtil;
 import com.blanchebridal.backend.rental.entity.Rental;
+import com.blanchebridal.backend.rental.entity.RentalBookingPath;
 import com.blanchebridal.backend.rental.entity.RentalStatus;
 import com.blanchebridal.backend.rental.repository.RentalRepository;
 import com.blanchebridal.backend.shared.email.EmailService;
@@ -349,44 +350,59 @@ public class PaymentServiceImpl implements PaymentService {
     /**
      * Called from handleWebhook() and confirmCashPayment() when the confirmed
      * order is a synthetic rental order (Order.isRentalDeposit = true).
-     * Dispatches to the fitting-payment or handover-payment handler depending
-     * on which of the rental's two order slots this order fills — a rental
-     * now has TWO synthetic orders (fitting 50% + handover 50%+deposit), so
-     * this can no longer assume it's always the first one.
+     * Dispatches to the first-payment or handover-payment handler depending
+     * on which of the rental's order slots this order fills. Note that for
+     * SAME_DAY bookings there is only ever one payment/order — handoverOrder
+     * stays null forever for that path, so the second branch below is only
+     * ever reached by ADVANCE rentals.
      */
     private void handleRentalPaymentConfirmed(Order order) {
         rentalRepository.findByOrder_Id(order.getId()).ifPresentOrElse(
-                this::handleFittingPaymentConfirmed,
+                this::handleFirstRentalPaymentConfirmed,
                 () -> rentalRepository.findByHandoverOrder_Id(order.getId()).ifPresentOrElse(
                         this::handleHandoverPaymentConfirmed,
                         () -> log.warn("[Rental] Order {} flagged isRentalDeposit=true but matches "
-                                + "neither a rental's fitting order nor handover order.", order.getId())
+                                + "neither a rental's booking order nor handover order.", order.getId())
                 )
         );
     }
 
     /**
-     * First payment (50% rental fee, paid at fitting-booking time) confirmed.
-     * Flips PENDING_PAYMENT -> BOOKED. Does not touch Product.stock — rentals
-     * don't deduct stock.
+     * First payment confirmed — the amount and meaning depend on bookingPath:
+     * - ADVANCE: 50% of dressValue, paid at fitting-booking time. Flips
+     *   PENDING_PAYMENT -> BOOKED and waits for the second (handover) payment.
+     * - SAME_DAY: 100% of dressValue, the only payment this rental will ever
+     *   have. Flips PENDING_PAYMENT -> ACTIVE directly — there is no handover
+     *   payment step for this path, so handoverConfirmedAt is intentionally
+     *   left null. "SAME_DAY + status=ACTIVE" is self-evidently fully paid.
+     * Does not touch Product.stock — rentals don't deduct stock.
      */
-    private void handleFittingPaymentConfirmed(Rental rental) {
+    private void handleFirstRentalPaymentConfirmed(Rental rental) {
         if (rental.getStatus() != RentalStatus.PENDING_PAYMENT) {
-            log.info("[Rental] Fitting payment confirmed for rental {} but it's already in status {} — skipping.",
+            log.info("[Rental] First payment confirmed for rental {} but it's already in status {} — skipping.",
                     rental.getId(), rental.getStatus());
             return;
         }
+
+        if (rental.getBookingPath() == RentalBookingPath.SAME_DAY) {
+            rental.setStatus(RentalStatus.ACTIVE);
+            rentalRepository.save(rental);
+            log.info("[Rental] Rental {} transitioned PENDING_PAYMENT -> ACTIVE (SAME_DAY, full dress value "
+                    + "paid in one payment — dress handed over now).", rental.getId());
+            return;
+        }
+
         rental.setStatus(RentalStatus.BOOKED);
         rentalRepository.save(rental);
-        log.info("[Rental] Rental {} transitioned PENDING_PAYMENT -> BOOKED (fitting payment confirmed).",
-                rental.getId());
+        log.info("[Rental] Rental {} transitioned PENDING_PAYMENT -> BOOKED (ADVANCE, first 50% of dress "
+                + "value confirmed).", rental.getId());
     }
 
     /**
-     * Second payment (remaining 50% + security deposit, paid at handover)
-     * confirmed. Marks handoverConfirmedAt and activates the rental
-     * immediately — handover only happens at/after rentalStart, so there's no
-     * need to wait for the scheduler's date-based activation.
+     * Second payment (remaining 50% of dressValue, paid at handover) confirmed
+     * — ADVANCE bookings only. Marks handoverConfirmedAt and activates the
+     * rental immediately — handover only happens at/after rentalStart, so
+     * there's no need to wait for the scheduler's date-based activation.
      */
     private void handleHandoverPaymentConfirmed(Rental rental) {
         if (rental.getStatus() != RentalStatus.BOOKED) {
@@ -397,8 +413,8 @@ public class PaymentServiceImpl implements PaymentService {
         rental.setHandoverConfirmedAt(LocalDateTime.now());
         rental.setStatus(RentalStatus.ACTIVE);
         rentalRepository.save(rental);
-        log.info("[Rental] Rental {} transitioned BOOKED -> ACTIVE (handover payment confirmed, dress handed over).",
-                rental.getId());
+        log.info("[Rental] Rental {} transitioned BOOKED -> ACTIVE (remaining 50% of dress value confirmed, "
+                + "dress handed over).", rental.getId());
     }
 
     // ─── Custom-order payment hook ──────────────────────────────────────────

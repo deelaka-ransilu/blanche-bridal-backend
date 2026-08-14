@@ -165,10 +165,12 @@ public class RentalController {
 
     @GetMapping("/rentable-products")
     @PreAuthorize("hasAnyRole('ADMIN')")
-    public ResponseEntity<Map<String, Object>> getRentableProducts() {
+    public ResponseEntity<Map<String, Object>> getRentableProducts(
+            @RequestParam java.time.LocalDate rentalStart,
+            @RequestParam java.time.LocalDate rentalEnd) {
         return ResponseEntity.ok(Map.of(
                 "success", true,
-                "data", rentalService.getRentableProducts()
+                "data", rentalService.getRentableProducts(rentalStart, rentalEnd)
         ));
     }
 

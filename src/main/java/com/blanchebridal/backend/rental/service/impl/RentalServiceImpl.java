@@ -65,6 +65,11 @@ public class RentalServiceImpl implements RentalService {
     // business confirms the exact LKR figure.
     private static final BigDecimal LATE_FEE_PER_DAY = new BigDecimal("1000.00");
 
+    // A dress becomes bookable again this many days after a previous
+    // booking's planned rentalEnd (cleaning/pressing/repair turnaround).
+    // Always calculated from the planned rentalEnd, not the actual returnDate.
+    private static final int AVAILABILITY_BUFFER_DAYS_AFTER_END = 2;
+
     private final RentalRepository rentalRepository;
     private final UserRepository userRepository;
     private final ProductRepository productRepository;
@@ -81,11 +86,8 @@ public class RentalServiceImpl implements RentalService {
         Product product = productRepository.findById(req.getProductId())
                 .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
-        boolean alreadyRented = rentalRepository.existsByProduct_IdAndStatusIn(
-                req.getProductId(), List.of(RentalStatus.ACTIVE, RentalStatus.OVERDUE));
-        if (alreadyRented) {
-            throw new IllegalStateException(
-                    "Product is currently rented out and not yet returned");
+        if (overlapsBlockingRental(req.getProductId(), req.getRentalStart(), req.getRentalEnd())) {
+            throw new IllegalStateException("This dress is not available for the selected dates");
         }
 
         Order order = null;
@@ -151,11 +153,8 @@ public class RentalServiceImpl implements RentalService {
             throw new IllegalArgumentException("Fitting date cannot be in the past");
         }
 
-        boolean alreadyRented = rentalRepository.existsByProduct_IdAndStatusIn(
-                req.getProductId(), List.of(RentalStatus.ACTIVE, RentalStatus.OVERDUE));
-        if (alreadyRented) {
-            throw new IllegalStateException(
-                    "Product is currently rented out and not yet returned");
+        if (overlapsBlockingRental(req.getProductId(), req.getRentalStart(), req.getRentalEnd())) {
+            throw new IllegalStateException("This dress is not available for the selected dates");
         }
 
         BigDecimal rentalFee = computeRentalFee(product, req.getRentalStart(), req.getRentalEnd());
@@ -557,7 +556,6 @@ public class RentalServiceImpl implements RentalService {
         log.info("[RentalScheduler] Expired {} stale rental booking(s).", toExpire.size());
     }
 
-    @Override
     @Transactional(readOnly = true)
     public List<RentableProductResponse> getRentableProducts() {
         return productRepository.findAll().stream()
@@ -599,8 +597,8 @@ public class RentalServiceImpl implements RentalService {
             throw new IllegalStateException(
                     "This dress isn't set up for rental yet (missing dress value): " + product.getName());
         }
-        if (rentalRepository.existsByProduct_IdAndStatusIn(product.getId(), BOOKED_STATUSES)) {
-            throw new IllegalStateException("This gown is already booked: " + product.getName());
+        if (overlapsBlockingRental(product.getId(), req.getRentalStart(), req.getRentalEnd())) {
+            throw new IllegalStateException("This gown is not available for the selected dates: " + product.getName());
         }
 
         BigDecimal dressValue = product.getDressValue();
@@ -690,6 +688,18 @@ public class RentalServiceImpl implements RentalService {
 
         rental.setNotes(req.getNotes());
         return toResponse(rentalRepository.save(rental));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RentableProductResponse> getRentableProducts(LocalDate rentalStart, LocalDate rentalEnd) {
+        return productRepository.findAll().stream()
+                .filter(p -> p.getType() == ProductType.DRESS)
+                .filter(p -> Boolean.TRUE.equals(p.getIsAvailable()))
+                .filter(p -> Boolean.TRUE.equals(p.getIsActive()))
+                .filter(p -> !overlapsBlockingRental(p.getId(), rentalStart, rentalEnd))
+                .map(this::toRentableResponse)
+                .toList();
     }
 
     // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -819,5 +829,11 @@ public class RentalServiceImpl implements RentalService {
                 .size(item.getSize())
                 .subtotal(subtotal)
                 .build();
+    }
+
+    private boolean overlapsBlockingRental(UUID productId, LocalDate requestedStart, LocalDate requestedEnd) {
+        return rentalRepository.findByProduct_IdAndStatusIn(productId, BOOKED_STATUSES).stream()
+                .anyMatch(r -> !r.getRentalStart().isAfter(requestedEnd)
+                        && !r.getRentalEnd().plusDays(AVAILABILITY_BUFFER_DAYS_AFTER_END).isBefore(requestedStart));
     }
 }

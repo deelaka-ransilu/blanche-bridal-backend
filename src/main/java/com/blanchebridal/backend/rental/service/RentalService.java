@@ -8,6 +8,7 @@ import com.blanchebridal.backend.rental.entity.RentalStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -39,9 +40,9 @@ public interface RentalService {
 
     void expireStaleBookings();
 
-    List<RentableProductResponse> getRentableProducts();
-
     OrderResponse createRentalBooking(CreateRentalBookingRequest req, UUID callerId, String role);
 
     RentalResponse updateNotes(UUID id, UpdateRentalNotesRequest req);
+
+    List<RentableProductResponse> getRentableProducts(LocalDate rentalStart, LocalDate rentalEnd);
 }
