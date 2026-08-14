@@ -1,5 +1,6 @@
 package com.blanchebridal.backend.rental.dto.req;
 
+import com.blanchebridal.backend.rental.entity.RentalBookingPath;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -22,7 +23,9 @@ public class CreateRentalRequest {
     @NotNull(message = "Rental end date is required")
     private LocalDate rentalEnd;
 
-    private BigDecimal depositAmount;
+    private RentalBookingPath bookingPath = RentalBookingPath.ADVANCE;
+
+    private BigDecimal dressValue;
     private String notes;
     private UUID orderId; // optional — link to an existing order
 }

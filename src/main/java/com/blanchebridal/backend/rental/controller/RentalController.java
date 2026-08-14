@@ -163,20 +163,6 @@ public class RentalController {
         ));
     }
 
-    @PutMapping("/{id}/balance")
-    @PreAuthorize("hasAnyRole('ADMIN')")
-    public ResponseEntity<Map<String, Object>> updateBalance(
-            @PathVariable UUID id,
-            @Valid @RequestBody UpdateBalanceRequest request) {
-
-        log.info("[Rental] Balance update — rental: {}, new balance: {}",
-                id, request.getBalanceDue());
-        return ResponseEntity.ok(Map.of(
-                "success", true,
-                "data", rentalService.updateBalance(id, request)
-        ));
-    }
-
     @GetMapping("/rentable-products")
     @PreAuthorize("hasAnyRole('ADMIN')")
     public ResponseEntity<Map<String, Object>> getRentableProducts() {

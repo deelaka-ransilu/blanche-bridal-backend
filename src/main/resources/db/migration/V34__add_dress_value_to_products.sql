@@ -1,0 +1,1 @@
+ALTER TABLE products ADD COLUMN dress_value NUMERIC(10,2);

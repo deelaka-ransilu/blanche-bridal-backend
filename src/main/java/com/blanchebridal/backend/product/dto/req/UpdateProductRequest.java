@@ -12,6 +12,7 @@ public record UpdateProductRequest(
         UUID categoryId,
         BigDecimal rentalPrice,
         BigDecimal rentalPricePerDay,
+        BigDecimal dressValue,
         BigDecimal purchasePrice,
         @Min(0) Integer stock,
         List<String> sizes,

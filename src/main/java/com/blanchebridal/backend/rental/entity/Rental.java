@@ -38,20 +38,26 @@ public class Rental {
     @EqualsAndHashCode.Exclude
     private Product product;
 
-    // FIRST payment: 50% of rental fee, collected at fitting-booking time.
+    // ADVANCE: first payment (50% of dressValue), collected at booking time.
+    // SAME_DAY: the ONLY payment (100% of dressValue) — handoverOrder is
+    // never set for this path.
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", unique = true)
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     private Order order;
 
-    // SECOND payment: remaining 50% rental fee + security deposit, collected
-    // at handover (pickup).
+    // ADVANCE only: second payment (remaining 50% of dressValue), collected
+    // at pickup/handover. Always null for SAME_DAY — see bookingPath.
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "handover_order_id", unique = true)
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     private Order handoverOrder;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "booking_path", nullable = false, length = 20)
+    private RentalBookingPath bookingPath;
 
     @Column(name = "rental_start", nullable = false)
     private LocalDate rentalStart;
@@ -66,22 +72,17 @@ public class Rental {
     @Column(nullable = false, length = 20)
     private RentalStatus status;
 
-    // Total rental fee (both halves combined). Replaces the old dual-purpose
-    // depositAmount field, which is kept only for backward compatibility with
-    // rows written by the previous flow.
+    // Snapshotted from Product.dressValue at booking time — the full
+    // replacement value of the dress, and the total deposit held by the
+    // shop once fully paid (either path). Locked in here so a later change
+    // to the product's dressValue never alters an in-progress rental.
+    @Column(name = "dress_value", precision = 10, scale = 2)
+    private BigDecimal dressValue;
+
+    // Rental fee for the booked date range (flat or per-day × days).
+    // Deducted from dressValue at return, same as before.
     @Column(name = "rental_fee", precision = 10, scale = 2)
     private BigDecimal rentalFee;
-
-    @Column(name = "deposit_amount", precision = 10, scale = 2)
-    private BigDecimal depositAmount;
-
-    // Refundable security deposit — 30% of rentalFee, collected alongside the
-    // second (handover) payment. Buffer for damage cost + late fees.
-    @Column(name = "security_deposit_amount", precision = 10, scale = 2)
-    private BigDecimal securityDepositAmount;
-
-    @Column(name = "security_deposit_refunded_amount", precision = 10, scale = 2)
-    private BigDecimal securityDepositRefundedAmount;
 
     @Column(name = "damage_cost", precision = 10, scale = 2)
     private BigDecimal damageCost;
@@ -89,17 +90,18 @@ public class Rental {
     @Column(name = "late_fee_amount", precision = 10, scale = 2)
     private BigDecimal lateFeeAmount;
 
-    // If damageCost + lateFeeAmount exceeds securityDepositAmount, the
-    // difference the customer still owes on top of the forfeited deposit.
+    // refund = dressValue - rentalFee - damageCost (- lateFeeAmount).
+    // Never negative — see markReturned in Step 5.
+    @Column(name = "refund_amount", precision = 10, scale = 2)
+    private BigDecimal refundAmount;
+
+    // If damageCost + lateFeeAmount exceeds dressValue - rentalFee, the
+    // shortfall the customer still owes on top of getting nothing back.
     @Column(name = "amount_owed_by_customer", precision = 10, scale = 2)
     private BigDecimal amountOwedByCustomer;
 
     @Column(name = "handover_confirmed_at")
     private LocalDateTime handoverConfirmedAt;
-
-    @Column(name = "balance_due", precision = 10, scale = 2)
-    @Builder.Default
-    private BigDecimal balanceDue = BigDecimal.ZERO;
 
     @Column(columnDefinition = "TEXT")
     private String notes;
@@ -112,8 +114,8 @@ public class Rental {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    // Fitting appointment (type RENTAL_FITTING), booked on/before
-    // rentalStart - 2 days.
+    // Fitting appointment (type RENTAL_FITTING). ADVANCE only — SAME_DAY has
+    // no separate fitting visit, the customer is picking up today.
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "appointment_id")
     @ToString.Exclude

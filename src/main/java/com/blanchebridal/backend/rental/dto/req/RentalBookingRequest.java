@@ -20,17 +20,12 @@ public class RentalBookingRequest {
     @NotNull(message = "Rental end date is required")
     private LocalDate rentalEnd;
 
-    // Replaces the old single "timeSlot" (pickup slot) — pickup itself no
-    // longer needs a slot, only the fitting does.
     @NotNull(message = "Fitting date is required")
     private LocalDate fittingDate;
 
     @NotNull(message = "Fitting time slot is required")
     private String fittingTimeSlot;
 
-    // Re-added — rentals are no longer cash-only. The 50% fitting payment can
-    // be cash or PayHere. CARD is rejected below, same convention as
-    // CreateRentalBookingRequest.
     @NotNull(message = "Payment method is required")
     private PaymentMethod paymentMethod;
 

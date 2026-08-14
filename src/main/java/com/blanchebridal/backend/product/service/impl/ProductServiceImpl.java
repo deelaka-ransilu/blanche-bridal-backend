@@ -83,7 +83,8 @@ public class ProductServiceImpl implements ProductService {
                         "Category not found: " + request.categoryId()));
 
         validateCategoryProductTypeMatch(
-                category, request.purchasePrice(), request.rentalPrice(), request.rentalPricePerDay());
+                category, request.purchasePrice(), request.rentalPrice(), request.rentalPricePerDay(),
+                request.dressValue());
 
         Product product = Product.builder()
                 .name(request.name())
@@ -93,6 +94,7 @@ public class ProductServiceImpl implements ProductService {
                 .category(category)
                 .rentalPrice(request.rentalPrice())
                 .rentalPricePerDay(request.rentalPricePerDay())
+                .dressValue(request.dressValue())
                 .purchasePrice(request.purchasePrice())
                 .stock(request.stock())
                 .sizes(toJson(request.sizes()))
@@ -141,14 +143,17 @@ public class ProductServiceImpl implements ProductService {
                 ? request.rentalPrice() : product.getRentalPrice();
         BigDecimal rentalPricePerDay = request.rentalPricePerDay() != null
                 ? request.rentalPricePerDay() : product.getRentalPricePerDay();
+        BigDecimal dressValue = request.dressValue() != null
+                ? request.dressValue() : product.getDressValue();
 
-        validateCategoryProductTypeMatch(category, purchasePrice, rentalPrice, rentalPricePerDay);
+        validateCategoryProductTypeMatch(category, purchasePrice, rentalPrice, rentalPricePerDay, dressValue);
 
         product.setCategory(category);
         product.setType(deriveProductType(category));
         product.setPurchasePrice(purchasePrice);
         product.setRentalPrice(rentalPrice);
         product.setRentalPricePerDay(rentalPricePerDay);
+        product.setDressValue(dressValue);
 
         if (request.images() != null) {
             // Clean up old images from Cloudinary before replacing
@@ -238,7 +243,8 @@ public class ProductServiceImpl implements ProductService {
             Category category,
             BigDecimal purchasePrice,
             BigDecimal rentalPrice,
-            BigDecimal rentalPricePerDay
+            BigDecimal rentalPricePerDay,
+            BigDecimal dressValue
     ) {
         boolean hasPurchase = purchasePrice != null;
         boolean hasRental = rentalPrice != null || rentalPricePerDay != null;
@@ -256,6 +262,9 @@ public class ProductServiceImpl implements ProductService {
             }
             if (hasPurchase) {
                 throw new ConflictException("Dress products cannot have a purchase price");
+            }
+            if (dressValue == null) {
+                throw new ConflictException("Dress products require a dress value (replacement cost)");
             }
         }
     }
@@ -334,9 +343,9 @@ public class ProductServiceImpl implements ProductService {
         List<ProductDetailResponse.ImageInfo> images = p.getImages() == null
                 ? Collections.emptyList()
                 : p.getImages().stream()
-                  .map(i -> new ProductDetailResponse.ImageInfo(
-                          i.getId(), i.getUrl(), i.getDisplayOrder()))
-                  .toList();
+                .map(i -> new ProductDetailResponse.ImageInfo(
+                        i.getId(), i.getUrl(), i.getDisplayOrder()))
+                .toList();
 
         ProductSummaryResponse.CategoryInfo categoryInfo = p.getCategory() != null
                 && Boolean.TRUE.equals(p.getCategory().getIsActive())
@@ -346,7 +355,7 @@ public class ProductServiceImpl implements ProductService {
 
         return new ProductDetailResponse(
                 p.getId(), p.getName(), p.getSlug(), p.getDescription(), p.getType(),
-                p.getRentalPrice(), p.getRentalPricePerDay(), p.getPurchasePrice(),
+                p.getRentalPrice(), p.getRentalPricePerDay(), p.getDressValue(), p.getPurchasePrice(),
                 p.getStock(), p.getIsAvailable(),
                 fromJson(p.getSizes()), images,
                 null, categoryInfo,

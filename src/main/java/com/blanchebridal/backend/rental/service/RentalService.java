@@ -23,16 +23,14 @@ public interface RentalService {
 
     RentalResponse getRentalById(UUID id, UUID requestingUserId, String role);
 
-    // Replaces the old direct markReturned(id, date) — now takes the full
-    // request so damage/damageCost flow through to the refund calculation.
     RentalResponse markReturned(UUID id, MarkReturnedRequest req);
-
-    RentalResponse updateBalance(UUID id, UpdateBalanceRequest req);
 
     RentalResponse cancelRental(UUID id, UUID userId, String role);
 
-    // ADMIN/EMPLOYEE — confirms handover at pickup: creates the second
-    // synthetic order (remaining 50% rental fee + security deposit).
+    // ADMIN — ADVANCE only: confirms handover at pickup, creates the second
+    // synthetic order (remaining 50% of dressValue). SAME_DAY rentals never
+    // call this — they go PENDING_PAYMENT -> ACTIVE directly on their single
+    // payment confirming.
     RentalResponse confirmHandover(UUID id, HandoverRequest req, UUID callerId, String role);
 
     void markOverdueRentals();

@@ -51,6 +51,12 @@ public class Product {
     @Column(name = "rental_price_per_day", precision = 10, scale = 2)
     private BigDecimal rentalPricePerDay;
 
+    // Full replacement value of the dress — the amount charged (in full, or
+    // split 50/50) as a deposit when the dress is rented out. Required for
+    // any DRESS product to be rentable — see RentalServiceImpl.
+    @Column(name = "dress_value", precision = 10, scale = 2)
+    private BigDecimal dressValue;
+
     @Column(name = "purchase_price", precision = 10, scale = 2)
     private BigDecimal purchasePrice;
 

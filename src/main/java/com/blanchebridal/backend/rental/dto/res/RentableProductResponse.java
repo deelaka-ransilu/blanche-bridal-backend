@@ -19,6 +19,7 @@ public class RentableProductResponse {
     private ProductType type;
     private BigDecimal rentalPrice;
     private BigDecimal rentalPricePerDay;
+    private BigDecimal dressValue;
     private String categoryName;
     private String firstImageUrl;
 }

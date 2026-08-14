@@ -1,6 +1,7 @@
 package com.blanchebridal.backend.rental.dto.res;
 
 import com.blanchebridal.backend.payment.entity.PaymentMethod;
+import com.blanchebridal.backend.rental.entity.RentalBookingPath;
 import com.blanchebridal.backend.rental.entity.RentalStatus;
 import lombok.Builder;
 import lombok.Data;
@@ -22,34 +23,29 @@ public class RentalResponse {
     private String customerName;
     private String customerEmail;
 
-    private UUID orderId;          // fitting (first) payment order
-    private UUID handoverOrderId;  // handover (second) payment order
+    private UUID orderId;          // ADVANCE: first (50%) payment. SAME_DAY: the only payment.
+    private UUID handoverOrderId;  // ADVANCE only — second (remaining 50%) payment.
 
-    // Payment method on the fitting (first) order — CASH or PAYHERE.
-    // Needed by the customer detail page to show the right "how to pay"
-    // messaging instead of a PayHere-only default.
     private PaymentMethod paymentMethod;
+    private RentalBookingPath bookingPath;
 
     private LocalDate rentalStart;
     private LocalDate rentalEnd;
     private LocalDate returnDate;
     private RentalStatus status;
 
+    private BigDecimal dressValue;
     private BigDecimal rentalFee;
-    private BigDecimal securityDepositAmount;
-    private BigDecimal securityDepositRefundedAmount;
     private BigDecimal damageCost;
     private BigDecimal lateFeeAmount;
+    private BigDecimal refundAmount;
     private BigDecimal amountOwedByCustomer;
     private LocalDateTime handoverConfirmedAt;
 
-    private BigDecimal depositAmount; // legacy field, kept for old rows
-    private BigDecimal balanceDue;
     private String notes;
     private LocalDateTime createdAt;
 
-    // Fitting appointment fields — renamed from appointmentDate/TimeSlot/Id
-    // for clarity now that this is unambiguously the fitting, not a pickup.
+    // Fitting fields — ADVANCE only, null for SAME_DAY (no fitting visit).
     private LocalDate fittingDate;
     private String fittingTimeSlot;
     private UUID fittingAppointmentId;

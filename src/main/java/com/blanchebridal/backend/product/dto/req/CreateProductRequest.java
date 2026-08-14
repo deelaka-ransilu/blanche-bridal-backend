@@ -14,6 +14,7 @@ public record CreateProductRequest(
         @NotNull UUID categoryId,
         BigDecimal rentalPrice,
         BigDecimal rentalPricePerDay,
+        BigDecimal dressValue,
         BigDecimal purchasePrice,
         @NotNull @Min(0) Integer stock,
         List<String> sizes,

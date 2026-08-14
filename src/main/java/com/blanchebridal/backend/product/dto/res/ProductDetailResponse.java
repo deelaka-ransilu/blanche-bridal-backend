@@ -15,6 +15,7 @@ public record ProductDetailResponse(
         ProductType type,
         BigDecimal rentalPrice,
         BigDecimal rentalPricePerDay,
+        BigDecimal dressValue,
         BigDecimal purchasePrice,
         Integer stock,
         Boolean isAvailable,

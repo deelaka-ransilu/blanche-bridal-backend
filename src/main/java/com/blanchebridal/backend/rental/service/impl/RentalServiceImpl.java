@@ -8,7 +8,6 @@ import com.blanchebridal.backend.exception.ConflictException;
 import com.blanchebridal.backend.order.dto.res.OrderItemResponse;
 import com.blanchebridal.backend.order.dto.res.OrderResponse;
 import com.blanchebridal.backend.order.repository.OrderRepository;
-import com.blanchebridal.backend.payment.entity.PaymentMethod;
 import com.blanchebridal.backend.product.entity.ProductType;
 import com.blanchebridal.backend.rental.dto.req.*;
 import com.blanchebridal.backend.rental.dto.res.RentableProductResponse;
@@ -23,6 +22,7 @@ import com.blanchebridal.backend.product.entity.Product;
 import com.blanchebridal.backend.product.repository.ProductRepository;
 import com.blanchebridal.backend.rental.dto.res.RentalResponse;
 import com.blanchebridal.backend.rental.entity.Rental;
+import com.blanchebridal.backend.rental.entity.RentalBookingPath;
 import com.blanchebridal.backend.rental.entity.RentalStatus;
 import com.blanchebridal.backend.rental.repository.RentalRepository;
 import com.blanchebridal.backend.rental.service.RentalService;
@@ -52,20 +52,17 @@ public class RentalServiceImpl implements RentalService {
     private static final List<RentalStatus> BOOKED_STATUSES =
             List.of(RentalStatus.PENDING_PAYMENT, RentalStatus.BOOKED, RentalStatus.ACTIVE);
 
-    // Fitting must be booked at least this many days before rentalStart, so
-    // the shop has time to do alterations after the fitting.
+    // Fitting must be booked at least this many days before rentalStart —
+    // ADVANCE path only (customer self-service booking).
     private static final int FITTING_CUTOFF_DAYS_BEFORE_START = 2;
 
-    // Security deposit = this fraction of the total rental fee.
-    private static final BigDecimal SECURITY_DEPOSIT_RATE = new BigDecimal("0.30");
-
-    // Each payment installment is this fraction of the total rental fee.
+    // Each installment on the ADVANCE path is this fraction of dressValue.
     private static final BigDecimal INSTALLMENT_RATE = new BigDecimal("0.50");
 
-    // Flat late-return fee per day late. Capped at the security deposit
-    // amount (see markReturned). Placeholder value — surface as a real
-    // configurable/admin-settable constant once the business confirms the
-    // exact LKR figure.
+    // Flat late-return fee per day late, deducted from the dressValue -
+    // rentalFee pool at return, same as damageCost. Placeholder value —
+    // surface as a real configurable/admin-settable constant once the
+    // business confirms the exact LKR figure.
     private static final BigDecimal LATE_FEE_PER_DAY = new BigDecimal("1000.00");
 
     private final RentalRepository rentalRepository;
@@ -97,13 +94,16 @@ public class RentalServiceImpl implements RentalService {
                     .orElseThrow(() -> new ResourceNotFoundException("Order not found"));
         }
 
+        BigDecimal dressValue = req.getDressValue() != null ? req.getDressValue() : product.getDressValue();
+
         Rental rental = Rental.builder()
                 .user(user)
                 .product(product)
                 .order(order)
+                .bookingPath(req.getBookingPath() != null ? req.getBookingPath() : RentalBookingPath.ADVANCE)
                 .rentalStart(req.getRentalStart())
                 .rentalEnd(req.getRentalEnd())
-                .depositAmount(req.getDepositAmount())
+                .dressValue(dressValue)
                 .notes(req.getNotes())
                 .status(RentalStatus.ACTIVE)
                 .build();
@@ -128,6 +128,11 @@ public class RentalServiceImpl implements RentalService {
             throw new IllegalStateException("Product is not available for rental: " + product.getName());
         }
 
+        if (product.getDressValue() == null) {
+            throw new IllegalStateException(
+                    "This dress isn't set up for rental yet (missing dress value): " + product.getName());
+        }
+
         if (!req.getRentalEnd().equals(req.getRentalStart().plusDays(1))) {
             throw new IllegalArgumentException("Rental end date must be exactly one day after the start date");
         }
@@ -136,9 +141,6 @@ public class RentalServiceImpl implements RentalService {
             throw new IllegalArgumentException("Rental start date cannot be in the past");
         }
 
-        // Fitting must be on/before rentalStart - 2 days. Validated
-        // server-side regardless of what the frontend computed and sent —
-        // the frontend cutoff display is UX only.
         LocalDate fittingCutoff = req.getRentalStart().minusDays(FITTING_CUTOFF_DAYS_BEFORE_START);
         if (req.getFittingDate().isAfter(fittingCutoff)) {
             throw new IllegalArgumentException(
@@ -156,22 +158,10 @@ public class RentalServiceImpl implements RentalService {
                     "Product is currently rented out and not yet returned");
         }
 
-        // Per-day pricing takes priority when set on the product; otherwise
-        // fall back to the flat one-time rentalPrice fee.
-        BigDecimal rentalFee;
-        long days = ChronoUnit.DAYS.between(req.getRentalStart(), req.getRentalEnd());
-        if (product.getRentalPricePerDay() != null) {
-            rentalFee = product.getRentalPricePerDay().multiply(BigDecimal.valueOf(days));
-        } else {
-            rentalFee = product.getRentalPrice();
-        }
-        rentalFee = rentalFee.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal rentalFee = computeRentalFee(product, req.getRentalStart(), req.getRentalEnd());
+        BigDecimal dressValue = product.getDressValue();
+        BigDecimal firstInstallment = dressValue.multiply(INSTALLMENT_RATE).setScale(2, RoundingMode.HALF_UP);
 
-        BigDecimal securityDeposit = rentalFee.multiply(SECURITY_DEPOSIT_RATE).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal firstInstallment = rentalFee.multiply(INSTALLMENT_RATE).setScale(2, RoundingMode.HALF_UP);
-
-        // Fitting slot — same slot pool as the standalone appointment
-        // booking flow, but keyed on fittingDate, not rentalStart.
         boolean slotTaken = appointmentRepository.existsByAppointmentDateAndTimeSlotAndStatusNot(
                 req.getFittingDate(), req.getFittingTimeSlot(), AppointmentStatus.CANCELLED);
         if (slotTaken) {
@@ -198,7 +188,7 @@ public class RentalServiceImpl implements RentalService {
                 .product(product)
                 .quantity(1)
                 .unitPrice(firstInstallment)
-                .productName(product.getName() + " — rental (50% deposit)")
+                .productName(product.getName() + " — rental (50% of dress value)")
                 .productImage(imageUrl)
                 .size(req.getSize())
                 .build();
@@ -207,7 +197,7 @@ public class RentalServiceImpl implements RentalService {
                 .user(user)
                 .status(OrderStatus.PENDING)
                 .totalAmount(firstInstallment)
-                .notes("Rental fitting-booking payment (50% of rental fee) — auto-generated")
+                .notes("Rental fitting-booking payment (50% of dress value) — auto-generated")
                 .orderMode(OrderMode.WEBSITE)
                 .paymentMethod(req.getPaymentMethod())
                 .isRentalDeposit(true)
@@ -222,20 +212,21 @@ public class RentalServiceImpl implements RentalService {
                 .product(product)
                 .order(savedOrder)
                 .appointment(savedAppointment)
+                .bookingPath(RentalBookingPath.ADVANCE)
                 .rentalStart(req.getRentalStart())
                 .rentalEnd(req.getRentalEnd())
+                .dressValue(dressValue)
                 .rentalFee(rentalFee)
-                .securityDepositAmount(securityDeposit)
                 .status(RentalStatus.PENDING_PAYMENT)
                 .build();
 
         Rental savedRental = rentalRepository.save(rental);
 
-        log.info("[Rental] Customer {} booked rental for product {} — synthetic order {} created, {} days, "
-                        + "rental fee LKR {} (50% due now: LKR {}, security deposit LKR {} due at handover), "
+        log.info("[Rental] Customer {} booked rental for product {} — synthetic order {} created, dress value "
+                        + "LKR {} (50% due now: LKR {}, remaining 50% due at handover), rental fee LKR {}, "
                         + "fitting slot {} on {}",
-                callerId, req.getProductId(), savedOrder.getId(), days, rentalFee, firstInstallment,
-                securityDeposit, req.getFittingTimeSlot(), req.getFittingDate());
+                callerId, req.getProductId(), savedOrder.getId(), dressValue, firstInstallment, rentalFee,
+                req.getFittingTimeSlot(), req.getFittingDate());
 
         return toResponse(savedRental);
     }
@@ -251,34 +242,30 @@ public class RentalServiceImpl implements RentalService {
             throw new UnauthorizedException("Only staff can confirm a rental handover");
         }
 
+        if (rental.getBookingPath() != RentalBookingPath.ADVANCE) {
+            throw new ConflictException(
+                    "SAME_DAY rentals have no separate handover payment — the dress value was already "
+                            + "paid in full at booking");
+        }
+
         if (rental.getStatus() != RentalStatus.BOOKED) {
             throw new ConflictException(
-                    "Rental must be BOOKED (fitting paid) before handover can be confirmed — current status: "
-                            + rental.getStatus());
+                    "Rental must be BOOKED (first payment received) before handover can be confirmed — "
+                            + "current status: " + rental.getStatus());
         }
 
         if (rental.getHandoverOrder() != null) {
             throw new ConflictException("Handover payment has already been created for this rental");
         }
 
-        BigDecimal securityDeposit = rental.getSecurityDepositAmount() != null
-                ? rental.getSecurityDepositAmount()
-                : BigDecimal.ZERO;
-
-        BigDecimal remainingInstallment = rental.getRentalFee()
+        BigDecimal remainingInstallment = rental.getDressValue()
                 .multiply(INSTALLMENT_RATE).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal handoverTotal = remainingInstallment
-                .add(securityDeposit)
-                .setScale(2, RoundingMode.HALF_UP);
 
         Product product = rental.getProduct();
         String imageUrl = (product != null && product.getImages() != null && !product.getImages().isEmpty())
                 ? product.getImages().get(0).getUrl()
                 : null;
 
-        // Size was captured on the fitting order's item at booking time —
-        // Rental itself has no size field, so pull it from there rather
-        // than leaving it null on this second synthetic order.
         String size = null;
         if (rental.getOrder() != null
                 && rental.getOrder().getItems() != null
@@ -289,9 +276,9 @@ public class RentalServiceImpl implements RentalService {
         OrderItem item = OrderItem.builder()
                 .product(product)
                 .quantity(1)
-                .unitPrice(handoverTotal)
+                .unitPrice(remainingInstallment)
                 .productName((product != null ? product.getName() : "Rental")
-                        + " — handover (remaining 50% + security deposit)")
+                        + " — handover (remaining 50% of dress value)")
                 .productImage(imageUrl)
                 .size(size)
                 .build();
@@ -299,8 +286,8 @@ public class RentalServiceImpl implements RentalService {
         Order handoverOrder = Order.builder()
                 .user(rental.getUser())
                 .status(OrderStatus.PENDING)
-                .totalAmount(handoverTotal)
-                .notes("Rental handover payment (remaining rental fee + security deposit) — auto-generated")
+                .totalAmount(remainingInstallment)
+                .notes("Rental handover payment (remaining 50% of dress value) — auto-generated")
                 .orderMode(OrderMode.WALK_IN)
                 .paymentMethod(req.getPaymentMethod())
                 .isRentalDeposit(true)
@@ -313,13 +300,13 @@ public class RentalServiceImpl implements RentalService {
         rental.setHandoverOrder(savedHandoverOrder);
         Rental savedRental = rentalRepository.save(rental);
 
-        log.info("[Rental] Handover payment created for rental {} — order {}, total LKR {} "
-                        + "(remaining fee LKR {} + security deposit LKR {}), method {}, confirmed by {}",
-                id, savedHandoverOrder.getId(), handoverTotal, remainingInstallment,
-                rental.getSecurityDepositAmount(), req.getPaymentMethod(), callerId);
+        log.info("[Rental] Handover payment created for rental {} — order {}, remaining 50% of dress value "
+                        + "LKR {}, method {}, confirmed by {}",
+                id, savedHandoverOrder.getId(), remainingInstallment, req.getPaymentMethod(), callerId);
 
         return toResponse(savedRental);
     }
+
     @Override
     @Transactional(readOnly = true)
     public Page<RentalResponse> getAllRentals(RentalStatus status, Pageable pageable) {
@@ -366,46 +353,46 @@ public class RentalServiceImpl implements RentalService {
         rental.setStatus(RentalStatus.RETURNED);
         rental.setReturnDate(req.getReturnDate());
 
-        BigDecimal deposit = rental.getSecurityDepositAmount() != null
-                ? rental.getSecurityDepositAmount() : BigDecimal.ZERO;
+        BigDecimal dressValue = rental.getDressValue() != null ? rental.getDressValue() : BigDecimal.ZERO;
+        BigDecimal rentalFee = rental.getRentalFee() != null ? rental.getRentalFee() : BigDecimal.ZERO;
 
         BigDecimal damageCost = (req.isDamaged() && req.getDamageCost() != null)
                 ? req.getDamageCost().setScale(2, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
 
         long daysLate = Math.max(0, ChronoUnit.DAYS.between(rental.getRentalEnd(), req.getReturnDate()));
-        BigDecimal lateFee = BigDecimal.ZERO;
-        if (daysLate > 0) {
-            BigDecimal rawLateFee = LATE_FEE_PER_DAY.multiply(BigDecimal.valueOf(daysLate));
-            lateFee = rawLateFee.min(deposit).setScale(2, RoundingMode.HALF_UP);
-        }
+        BigDecimal lateFee = daysLate > 0
+                ? LATE_FEE_PER_DAY.multiply(BigDecimal.valueOf(daysLate)).setScale(2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
 
+        // Base refund pool: dressValue minus the rental fee the shop earns
+        // for the booking. Damage and late fees are then deducted from that
+        // pool; anything beyond it becomes an amount the customer still owes.
+        BigDecimal pool = dressValue.subtract(rentalFee).max(BigDecimal.ZERO);
         BigDecimal totalDeduction = damageCost.add(lateFee);
 
-        BigDecimal refundedAmount;
+        BigDecimal refundAmount;
         BigDecimal owedAmount;
-        if (totalDeduction.compareTo(deposit) > 0) {
-            refundedAmount = BigDecimal.ZERO;
-            owedAmount = totalDeduction.subtract(deposit).setScale(2, RoundingMode.HALF_UP);
+        if (totalDeduction.compareTo(pool) > 0) {
+            refundAmount = BigDecimal.ZERO;
+            owedAmount = totalDeduction.subtract(pool).setScale(2, RoundingMode.HALF_UP);
         } else {
-            refundedAmount = deposit.subtract(totalDeduction).setScale(2, RoundingMode.HALF_UP);
+            refundAmount = pool.subtract(totalDeduction).setScale(2, RoundingMode.HALF_UP);
             owedAmount = BigDecimal.ZERO;
         }
 
         rental.setDamageCost(damageCost);
         rental.setLateFeeAmount(lateFee);
-        rental.setSecurityDepositRefundedAmount(refundedAmount);
+        rental.setRefundAmount(refundAmount);
         rental.setAmountOwedByCustomer(owedAmount);
 
-        log.info("[Rental] Rental {} returned on {} ({} day(s) late) — damage LKR {}, late fee LKR {}, "
-                        + "deposit refunded LKR {}, amount owed by customer LKR {}",
-                id, req.getReturnDate(), daysLate, damageCost, lateFee, refundedAmount, owedAmount);
+        log.info("[Rental] Rental {} returned on {} ({} day(s) late) — dress value LKR {}, rental fee LKR {}, "
+                        + "damage LKR {}, late fee LKR {}, refunded LKR {}, amount owed by customer LKR {}",
+                id, req.getReturnDate(), daysLate, dressValue, rentalFee, damageCost, lateFee, refundAmount,
+                owedAmount);
 
         Rental saved = rentalRepository.save(rental);
 
-        // Email the return summary — best-effort, never let a mail failure roll
-        // back the return itself. Same try/catch convention as OrderServiceImpl's
-        // sendConfirmationEmailSafely / sendCancelledEmailSafely.
         try {
             User customer = rental.getUser();
             Product product = rental.getProduct();
@@ -417,7 +404,7 @@ public class RentalServiceImpl implements RentalService {
                         req.getReturnDate(),
                         damageCost,
                         lateFee,
-                        refundedAmount,
+                        refundAmount,
                         owedAmount
                 );
             }
@@ -426,16 +413,6 @@ public class RentalServiceImpl implements RentalService {
         }
 
         return toResponse(saved);
-    }
-
-    @Override
-    @Transactional
-    public RentalResponse updateBalance(UUID id, UpdateBalanceRequest req) {
-        Rental rental = rentalRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Rental not found: " + id));
-
-        rental.setBalanceDue(req.getBalanceDue());
-        return toResponse(rentalRepository.save(rental));
     }
 
     @Override
@@ -450,14 +427,10 @@ public class RentalServiceImpl implements RentalService {
             throw new UnauthorizedException("Not authorized to cancel this rental");
         }
 
-        // Cancellable any time before handover — both the pre-fitting-payment
-        // case (PENDING_PAYMENT) and the post-fitting/pre-pickup case (BOOKED,
-        // full rental fee refunded per policy).
         if (rental.getStatus() != RentalStatus.PENDING_PAYMENT && rental.getStatus() != RentalStatus.BOOKED) {
             throw new ConflictException("This rental can no longer be cancelled");
         }
 
-        // Cancel the fitting appointment itself so its slot frees up.
         if (rental.getAppointment() != null
                 && rental.getAppointment().getStatus() != AppointmentStatus.CANCELLED) {
             rental.getAppointment().setStatus(AppointmentStatus.CANCELLED);
@@ -466,19 +439,14 @@ public class RentalServiceImpl implements RentalService {
 
         Order order = rental.getOrder();
         if (order != null && order.getStatus() == OrderStatus.PENDING) {
-            // Payment for the fitting installment never completed — just
-            // cancel it, nothing to refund.
             order.setStatus(OrderStatus.CANCELLED);
             orderRepository.save(order);
         }
-        // NOTE: if the fitting payment already completed (rental.status ==
-        // BOOKED), the order stays CONFIRMED here. Per policy the full rental
-        // fee is refundable in that case — the actual refund (with proof of
-        // bank transfer / cash handback) is processed by an admin through the
-        // existing refund flow (RefundController / RefundOrderButton) against
-        // rental.getOrder().getId(), same as any other order refund. This
-        // keeps refund processing consistent everywhere rather than adding a
-        // second, auto-triggered refund path here.
+        // NOTE: if the first payment already completed (rental.status ==
+        // BOOKED), the order stays CONFIRMED here. The paid amount is
+        // refundable per policy — an admin processes that refund through the
+        // existing refund flow against rental.getOrder().getId(), same as
+        // any other order refund.
 
         rental.setStatus(RentalStatus.CANCELLED);
         return toResponse(rentalRepository.save(rental));
@@ -503,12 +471,18 @@ public class RentalServiceImpl implements RentalService {
                 User customer = rental.getUser();
                 Product product = rental.getProduct();
                 if (customer != null && product != null) {
+                    // NOTE: sendRentalOverdueEmail's signature still takes a
+                    // balanceDue-shaped BigDecimal — pass dressValue for now
+                    // as a stand-in "amount at stake" figure. Revisit this
+                    // email template/signature in Step 9 alongside the
+                    // frontend rewrite; it's cosmetic only, not part of the
+                    // payment logic.
                     emailService.sendRentalOverdueEmail(
                             customer.getEmail(),
                             customer.getFirstName() + " " + customer.getLastName(),
                             product.getName(),
                             rental.getRentalEnd(),
-                            rental.getBalanceDue()
+                            rental.getDressValue()
                     );
                 }
             } catch (Exception e) {
@@ -523,11 +497,11 @@ public class RentalServiceImpl implements RentalService {
     @Override
     @Transactional
     public void markActiveRentals() {
-        // Fallback safety net only now — the normal path to ACTIVE is
-        // PaymentServiceImpl.handleRentalHandoverConfirmed() firing the
-        // moment the handover payment completes. This just catches any
-        // BOOKED rental whose start date has arrived without an explicit
-        // handover confirmation being recorded (e.g. manual data fixes).
+        // Fallback safety net only — the normal path to ACTIVE is
+        // PaymentServiceImpl firing the moment the final payment completes
+        // (handover payment for ADVANCE, the single payment for SAME_DAY).
+        // This just catches any BOOKED rental whose start date has arrived
+        // without an explicit payment confirmation being recorded.
         List<Rental> toActivate = rentalRepository
                 .findByStatusAndRentalStartLessThanEqual(RentalStatus.BOOKED, LocalDate.now());
 
@@ -540,7 +514,7 @@ public class RentalServiceImpl implements RentalService {
             rental.setStatus(RentalStatus.ACTIVE);
             rentalRepository.save(rental);
             log.info("[RentalScheduler] Rental {} transitioned BOOKED -> ACTIVE (start date {} reached, "
-                    + "no handover payment recorded).", rental.getId(), rental.getRentalStart());
+                    + "no payment confirmation recorded).", rental.getId(), rental.getRentalStart());
         }
 
         log.info("[RentalScheduler] Activated {} rental(s).", toActivate.size());
@@ -576,9 +550,8 @@ public class RentalServiceImpl implements RentalService {
                 orderRepository.save(order);
             }
 
-            log.info("[RentalScheduler] Rental {} expired — fitting-booking payment (50%) not received within "
-                            + "the grace period. Alterations were not started; booking and fitting cancelled.",
-                    rental.getId());
+            log.info("[RentalScheduler] Rental {} expired — first payment not received within the grace "
+                    + "period. Booking and any fitting cancelled.", rental.getId());
         }
 
         log.info("[RentalScheduler] Expired {} stale rental booking(s).", toExpire.size());
@@ -622,37 +595,44 @@ public class RentalServiceImpl implements RentalService {
         if (Boolean.FALSE.equals(product.getIsActive()) || Boolean.FALSE.equals(product.getIsAvailable())) {
             throw new IllegalStateException("Product is not available: " + product.getName());
         }
+        if (product.getDressValue() == null) {
+            throw new IllegalStateException(
+                    "This dress isn't set up for rental yet (missing dress value): " + product.getName());
+        }
         if (rentalRepository.existsByProduct_IdAndStatusIn(product.getId(), BOOKED_STATUSES)) {
             throw new IllegalStateException("This gown is already booked: " + product.getName());
         }
 
-        BigDecimal fee;
-        if (product.getRentalPricePerDay() != null) {
-            long days = ChronoUnit.DAYS.between(req.getRentalStart(), req.getRentalEnd());
-            fee = product.getRentalPricePerDay().multiply(BigDecimal.valueOf(days));
-        } else {
-            fee = product.getRentalPrice() != null ? product.getRentalPrice() : BigDecimal.ZERO;
-        }
-        fee = fee.setScale(2, RoundingMode.HALF_UP);
+        BigDecimal dressValue = product.getDressValue();
+        BigDecimal rentalFee = computeRentalFee(product, req.getRentalStart(), req.getRentalEnd());
 
-        BigDecimal securityDeposit = fee.multiply(SECURITY_DEPOSIT_RATE).setScale(2, RoundingMode.HALF_UP);
+        // ADVANCE: charge 50% now, remaining 50% collected later via
+        // confirmHandover(). SAME_DAY: charge the full dressValue now — no
+        // handover payment step exists for this path at all.
+        BigDecimal amountDueNow = req.getBookingPath() == RentalBookingPath.SAME_DAY
+                ? dressValue
+                : dressValue.multiply(INSTALLMENT_RATE).setScale(2, RoundingMode.HALF_UP);
 
         String imageUrl = (product.getImages() != null && !product.getImages().isEmpty())
                 ? product.getImages().get(0).getUrl()
                 : null;
 
+        String label = req.getBookingPath() == RentalBookingPath.SAME_DAY
+                ? product.getName() + " — rental (full dress value, same-day pickup)"
+                : product.getName() + " — rental (50% of dress value)";
+
         OrderItem item = OrderItem.builder()
                 .product(product)
                 .quantity(1)
-                .unitPrice(fee)
-                .productName(product.getName())
+                .unitPrice(amountDueNow)
+                .productName(label)
                 .productImage(imageUrl)
                 .build();
 
         Order order = Order.builder()
                 .user(customer)
                 .status(OrderStatus.PENDING)
-                .totalAmount(fee)
+                .totalAmount(amountDueNow)
                 .notes(req.getNotes())
                 .fulfillmentMethod("PICKUP")
                 .customerPhone(customer.getPhone())
@@ -669,20 +649,20 @@ public class RentalServiceImpl implements RentalService {
                 .user(customer)
                 .product(product)
                 .order(savedOrder)
+                .bookingPath(req.getBookingPath())
                 .rentalStart(req.getRentalStart())
                 .rentalEnd(req.getRentalEnd())
                 .status(RentalStatus.PENDING_PAYMENT)
-                .rentalFee(fee)
-                .securityDepositAmount(securityDeposit)
-                .depositAmount(fee)
-                .balanceDue(BigDecimal.ZERO)
+                .dressValue(dressValue)
+                .rentalFee(rentalFee)
                 .notes(req.getNotes())
                 .build();
         rentalRepository.save(rental);
 
-        log.info("[Rental] Created walk-in rental booking — order {} / product {} for customer {} "
-                        + "(created by {}) — fee LKR {}",
-                savedOrder.getId(), product.getId(), customer.getId(), callerId, fee);
+        log.info("[Rental] Created walk-in rental booking ({}) — order {} / product {} for customer {} "
+                        + "(created by {}) — dress value LKR {}, due now LKR {}",
+                req.getBookingPath(), savedOrder.getId(), product.getId(), customer.getId(), callerId,
+                dressValue, amountDueNow);
 
         try {
             emailService.sendRentalBookingCreatedEmail(
@@ -691,7 +671,7 @@ public class RentalServiceImpl implements RentalService {
                     product.getName(),
                     req.getRentalStart(),
                     req.getRentalEnd(),
-                    fee,
+                    rentalFee,
                     req.getPaymentMethod()
             );
         } catch (Exception e) {
@@ -710,6 +690,23 @@ public class RentalServiceImpl implements RentalService {
 
         rental.setNotes(req.getNotes());
         return toResponse(rentalRepository.save(rental));
+    }
+
+    // ─── Helpers ───────────────────────────────────────────────────────────────
+
+    // Per-day pricing takes priority when set on the product; otherwise falls
+    // back to the flat one-time rentalPrice fee. This is the SHOP'S EARNED
+    // rental fee — separate from dressValue, the deposit-sized replacement
+    // cost. Unchanged from the old model.
+    private BigDecimal computeRentalFee(Product product, LocalDate start, LocalDate end) {
+        BigDecimal fee;
+        if (product.getRentalPricePerDay() != null) {
+            long days = ChronoUnit.DAYS.between(start, end);
+            fee = product.getRentalPricePerDay().multiply(BigDecimal.valueOf(days));
+        } else {
+            fee = product.getRentalPrice() != null ? product.getRentalPrice() : BigDecimal.ZERO;
+        }
+        return fee.setScale(2, RoundingMode.HALF_UP);
     }
 
     // ─── Mapper ───────────────────────────────────────────────────────────────
@@ -740,20 +737,19 @@ public class RentalServiceImpl implements RentalService {
                 .customerEmail(customerEmail)
                 .orderId(rental.getOrder() != null ? rental.getOrder().getId() : null)
                 .paymentMethod(rental.getOrder() != null ? rental.getOrder().getPaymentMethod() : null)
+                .bookingPath(rental.getBookingPath())
                 .handoverOrderId(rental.getHandoverOrder() != null ? rental.getHandoverOrder().getId() : null)
                 .rentalStart(rental.getRentalStart())
                 .rentalEnd(rental.getRentalEnd())
                 .returnDate(rental.getReturnDate())
                 .status(rental.getStatus())
+                .dressValue(rental.getDressValue())
                 .rentalFee(rental.getRentalFee())
-                .securityDepositAmount(rental.getSecurityDepositAmount())
-                .securityDepositRefundedAmount(rental.getSecurityDepositRefundedAmount())
                 .damageCost(rental.getDamageCost())
                 .lateFeeAmount(rental.getLateFeeAmount())
+                .refundAmount(rental.getRefundAmount())
                 .amountOwedByCustomer(rental.getAmountOwedByCustomer())
                 .handoverConfirmedAt(rental.getHandoverConfirmedAt())
-                .depositAmount(rental.getDepositAmount())
-                .balanceDue(rental.getBalanceDue())
                 .notes(rental.getNotes())
                 .createdAt(rental.getCreatedAt())
                 .fittingDate(rental.getAppointment() != null ? rental.getAppointment().getAppointmentDate() : null)
@@ -769,6 +765,7 @@ public class RentalServiceImpl implements RentalService {
                 .type(p.getType())
                 .rentalPrice(p.getRentalPrice())
                 .rentalPricePerDay(p.getRentalPricePerDay())
+                .dressValue(p.getDressValue())
                 .categoryName(p.getCategory() != null ? p.getCategory().getName() : null)
                 .firstImageUrl((p.getImages() != null && !p.getImages().isEmpty())
                         ? p.getImages().get(0).getUrl()
