@@ -16,6 +16,16 @@ public interface OrderService {
     Page<OrderResponse> getMyOrders(UUID userId, Pageable pageable);
     OrderResponse getOrderById(UUID id, UUID requestingUserId, String role);
     OrderResponse updateOrderStatus(UUID id, OrderStatus newStatus);
-    void cancelOrder(UUID id, UUID userId);
+
+    /**
+     * Cancels the order if (and only if) it is currently PENDING.
+     * Returns true if the order was actually cancelled by this call, false
+     * if it was a no-op (order was already in a non-PENDING state, e.g.
+     * already CONFIRMED, CANCELLED, or COMPLETED). Previously void — callers
+     * could not distinguish "actually cancelled" from "silently did nothing"
+     * (Backend Issue #3 / STATUS.md).
+     */
+    boolean cancelOrder(UUID id, UUID userId);
+
     OrderResponse updatePaymentMethod(UUID id, PaymentMethod newMethod);
 }

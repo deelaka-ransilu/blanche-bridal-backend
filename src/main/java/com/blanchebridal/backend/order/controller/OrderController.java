@@ -126,8 +126,18 @@ public class OrderController {
 
         UUID userId = extractUserId(authHeader);
         log.info("[Order] Cancel request — order: {}, user: {}", id, userId);
-        orderService.cancelOrder(id, userId);
-        return ResponseEntity.ok(Map.of("success", true));
+
+        // cancelOrder now reports whether it actually cancelled the order
+        // (true) or silently no-op'd because the order was already past
+        // PENDING (false) — surfaced here as "cancelled" so the frontend
+        // can finally tell the two cases apart instead of always assuming
+        // success meant a real cancellation (Backend Issue #3).
+        boolean cancelled = orderService.cancelOrder(id, userId);
+
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "cancelled", cancelled
+        ));
     }
 
     @PutMapping("/{id}/payment-method")

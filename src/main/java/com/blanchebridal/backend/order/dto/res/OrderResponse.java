@@ -45,6 +45,13 @@ public class OrderResponse {
     // receipt is on file" is an actual clickable link, not just a claim.
     private String refundProofImageUrl;
 
+    // The customer-uploaded bank-transfer proof (Cloudinary URL) for THIS
+    // order's own payment — distinct from refundProofImageUrl above, which
+    // is the admin-uploaded proof for a refund payout. Sourced from
+    // Payment.proofImageUrl. Null until the customer uploads proof via
+    // POST /api/payments/{orderId}/bank-transfer-proof.
+    private String proofImageUrl;
+
     // True once the customer has submitted RefundBankDetails for this
     // order, regardless of whether the refund itself has been issued yet.
     private Boolean bankDetailsSubmitted;
@@ -55,4 +62,11 @@ public class OrderResponse {
     // link back to /my/custom-design/{id} and detect "this is a custom
     // order" without depending solely on ProductionStageRecord existing.
     private UUID customDesignRequestId;
+
+    // Set only when this Order is a rental booking/handover payment (see
+    // RentalServiceImpl.createRentalBooking) — lets the walk-in sale
+    // panel's confirmation screen link straight to /admin/rentals/{rentalId}
+    // instead of guessing a route from the order id. Null for every other
+    // order type.
+    private UUID rentalId;
 }

@@ -289,7 +289,7 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
-    public void cancelOrder(UUID id, UUID userId) {
+    public boolean cancelOrder(UUID id, UUID userId) {
         Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Order not found: " + id));
 
@@ -300,7 +300,7 @@ public class OrderServiceImpl implements OrderService {
         if (order.getStatus() != OrderStatus.PENDING) {
             log.info("[Order] cancelOrder called on non-PENDING order {} (status: {}). Ignoring.",
                     id, order.getStatus());
-            return;
+            return false;
         }
 
         restoreStock(order);
@@ -310,6 +310,8 @@ public class OrderServiceImpl implements OrderService {
         log.info("[Order] Cancelled order {} by user {}", id, userId);
 
         sendCancelledEmailSafely(saved);
+
+        return true;
     }
 
     @Override
@@ -481,6 +483,7 @@ public class OrderServiceImpl implements OrderService {
                 .refundAmount(refund != null ? refund.getAmount() : null)
                 .refundedAt(refund != null ? refund.getCreatedAt() : null)
                 .refundProofImageUrl(refund != null ? refund.getProofImageUrl() : null)
+                .proofImageUrl(payment != null ? payment.getProofImageUrl() : null)
                 .bankDetailsSubmitted(bankDetailsSubmitted)
                 .customDesignRequestId(customDesignRequestId)
                 .build();

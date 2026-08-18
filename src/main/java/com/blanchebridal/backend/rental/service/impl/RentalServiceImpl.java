@@ -644,7 +644,7 @@ public class RentalServiceImpl implements RentalService {
                 .rentalFee(rentalFee)
                 .notes(req.getNotes())
                 .build();
-        rentalRepository.save(rental);
+        Rental savedRental = rentalRepository.save(rental);
 
         log.info("[Rental] Created walk-in rental booking ({}) — order {} / product {} for customer {} "
                         + "(created by {}) — dress value LKR {}, due now LKR {}",
@@ -666,7 +666,7 @@ public class RentalServiceImpl implements RentalService {
                     savedOrder.getId(), e.getMessage());
         }
 
-        return toResponse(savedOrder);
+        return toResponse(savedOrder, savedRental.getId());
     }
 
     @Override
@@ -800,6 +800,20 @@ public class RentalServiceImpl implements RentalService {
                 .discountValue(order.getDiscountValue())
                 .discountReason(order.getDiscountReason())
                 .build();
+    }
+
+    // Overload used only by createRentalBooking() above — this is the one
+    // walk-in-booking path where the caller already has the freshly-created
+    // Rental's id in hand and wants it surfaced on the OrderResponse so the
+    // frontend can link straight to /admin/rentals/{rentalId} instead of
+    // guessing a route from the order id alone. Every other caller of the
+    // no-arg toResponse(Order) above is unaffected — rentalId simply stays
+    // null for those (the Lombok builder default), which is correct since
+    // this DTO is shared by every order type, not just rental bookings.
+    private OrderResponse toResponse(Order order, UUID rentalId) {
+        OrderResponse base = toResponse(order);
+        base.setRentalId(rentalId);
+        return base;
     }
 
     private OrderItemResponse toItemResponse(OrderItem item) {
