@@ -5,6 +5,7 @@ import com.blanchebridal.backend.payment.entity.PaymentMethod;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.javamail.JavaMailSender;
@@ -23,6 +24,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class EmailServiceImpl implements EmailService {
@@ -39,6 +41,8 @@ public class EmailServiceImpl implements EmailService {
             DateTimeFormatter.ofPattern("EEEE, d MMMM yyyy");
 
     private static final String BRAND_COLOR = "#c8102e";
+    private static final String SHOP_PHONE = "+94 71 202 6132"; // replace with real number
+    private static final String SHOP_EMAIL = "contact@blanchebridal.com"; // replace with real monitored inbox
 
     /**
      * Wraps a heading + body content in the shared card layout used by
@@ -72,6 +76,10 @@ public class EmailServiceImpl implements EmailService {
                                 <tr>
                                     <td style="padding:16px 40px 40px 40px; font-family:Arial, sans-serif; color:#5c5854; font-size:15px; line-height:1.6; text-align:left;">
                                         %s
+                                        <p style="margin-top:24px; padding-top:20px; border-top:1px solid #f0ebe6; font-size:13px; color:#a8a29a; text-align:center;">
+                                            Questions? Call us at <strong>%s</strong> or email
+                                            <a href="mailto:%s" style="color:%s; text-decoration:none;">%s</a>
+                                        </p>
                                     </td>
                                 </tr>
                             </table>
@@ -83,7 +91,7 @@ public class EmailServiceImpl implements EmailService {
                 </table>
             </body>
             </html>
-            """.formatted(BRAND_COLOR, heading, bodyHtml);
+            """.formatted(BRAND_COLOR, heading, bodyHtml, SHOP_PHONE, SHOP_EMAIL, BRAND_COLOR, SHOP_EMAIL);
     }
 
     /** Soft cream info card used for date/time/order-detail groupings. */
@@ -599,7 +607,7 @@ public class EmailServiceImpl implements EmailService {
                   %s
                   """.formatted(ctaButton(refundLink, "Submit Bank Details"))
                 : "<p>If a payment was made for this order, any applicable refund will be processed " +
-                  "separately and you'll receive a confirmation once it's complete.</p>";
+                "separately and you'll receive a confirmation once it's complete.</p>";
 
         String body = """
                 <p>Dear %s,</p>
@@ -874,8 +882,10 @@ public class EmailServiceImpl implements EmailService {
             helper.setText(html, true);
 
             mailSender.send(message);
+            log.info("[Email] Sent \"{}\" to {}", subject, toEmail);
 
         } catch (MessagingException e) {
+            log.error("[Email] Failed to send \"{}\" to {}: {}", subject, toEmail, e.getMessage());
             throw new RuntimeException("Failed to send email", e);
         }
     }
@@ -1015,8 +1025,11 @@ public class EmailServiceImpl implements EmailService {
             }
 
             mailSender.send(message);
+            log.info("[Email] Sent \"{}\" to {} (attachment: {})", subject, toEmail,
+                    attachmentBytes != null ? attachmentFilename : "none");
 
         } catch (MessagingException e) {
+            log.error("[Email] Failed to send \"{}\" to {}: {}", subject, toEmail, e.getMessage());
             throw new RuntimeException("Failed to send email", e);
         }
     }
