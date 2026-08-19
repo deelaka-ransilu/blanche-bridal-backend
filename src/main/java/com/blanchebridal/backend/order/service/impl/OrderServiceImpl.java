@@ -10,6 +10,7 @@ import com.blanchebridal.backend.payment.repository.PaymentRepository;
 import com.blanchebridal.backend.refund.entity.Refund;
 import com.blanchebridal.backend.refund.repository.RefundBankDetailsRepository;
 import com.blanchebridal.backend.refund.repository.RefundRepository;
+import com.blanchebridal.backend.rental.repository.RentalRepository;
 import com.blanchebridal.backend.shared.email.EmailService;
 import com.blanchebridal.backend.exception.ResourceNotFoundException;
 import com.blanchebridal.backend.exception.UnauthorizedException;
@@ -53,6 +54,7 @@ public class OrderServiceImpl implements OrderService {
     private final RefundBankDetailsRepository refundBankDetailsRepository;
     private final CustomDesignRequestRepository customDesignRequestRepository;
     private final EmailService emailService;
+    private final RentalRepository rentalRepository;
 
 
     @Override
@@ -459,6 +461,16 @@ public class OrderServiceImpl implements OrderService {
                 .map(cdr -> cdr.getId())
                 .orElse(null);
 
+        // Same dual-FK pattern as above — an Order may be linked as either a
+        // rental's booking order or its handover order (never both). Needed so
+        // /checkout/success can redirect the customer to /my/rentals/{id}
+        // instead of the generic order page once a rental payment (either the
+        // first or the handover installment) completes.
+        UUID rentalId = rentalRepository.findByOrder_Id(order.getId())
+                .or(() -> rentalRepository.findByHandoverOrder_Id(order.getId()))
+                .map(r -> r.getId())
+                .orElse(null);
+
         return OrderResponse.builder()
                 .id(order.getId())
                 .status(order.getStatus())
@@ -486,6 +498,7 @@ public class OrderServiceImpl implements OrderService {
                 .proofImageUrl(payment != null ? payment.getProofImageUrl() : null)
                 .bankDetailsSubmitted(bankDetailsSubmitted)
                 .customDesignRequestId(customDesignRequestId)
+                .rentalId(rentalId)
                 .build();
     }
 
