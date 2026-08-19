@@ -3,6 +3,7 @@ package com.blanchebridal.backend.rental.service;
 import com.blanchebridal.backend.order.dto.res.OrderResponse;
 import com.blanchebridal.backend.rental.dto.req.*;
 import com.blanchebridal.backend.rental.dto.res.RentableProductResponse;
+import com.blanchebridal.backend.rental.dto.res.BlockedDateRangeResponse;
 import com.blanchebridal.backend.rental.dto.res.RentalResponse;
 import com.blanchebridal.backend.rental.entity.RentalStatus;
 import org.springframework.data.domain.Page;
@@ -45,4 +46,6 @@ public interface RentalService {
     RentalResponse updateNotes(UUID id, UpdateRentalNotesRequest req);
 
     List<RentableProductResponse> getRentableProducts(LocalDate rentalStart, LocalDate rentalEnd);
+
+    List<BlockedDateRangeResponse> getBlockedDateRanges(UUID productId);
 }

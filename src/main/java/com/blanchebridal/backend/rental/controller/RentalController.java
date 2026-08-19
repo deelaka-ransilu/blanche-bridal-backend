@@ -201,6 +201,14 @@ public class RentalController {
         ));
     }
 
+    @GetMapping("/blocked-dates")
+    public ResponseEntity<Map<String, Object>> getBlockedDates(@RequestParam UUID productId) {
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "data", rentalService.getBlockedDateRanges(productId)
+        ));
+    }
+
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private UUID extractUserId(String authHeader) {

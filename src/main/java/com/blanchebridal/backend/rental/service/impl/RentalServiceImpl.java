@@ -10,6 +10,7 @@ import com.blanchebridal.backend.order.dto.res.OrderResponse;
 import com.blanchebridal.backend.order.repository.OrderRepository;
 import com.blanchebridal.backend.product.entity.ProductType;
 import com.blanchebridal.backend.rental.dto.req.*;
+import com.blanchebridal.backend.rental.dto.res.BlockedDateRangeResponse;
 import com.blanchebridal.backend.rental.dto.res.RentableProductResponse;
 import com.blanchebridal.backend.shared.email.EmailService;
 import com.blanchebridal.backend.exception.ResourceNotFoundException;
@@ -834,5 +835,16 @@ public class RentalServiceImpl implements RentalService {
         return rentalRepository.findByProduct_IdAndStatusIn(productId, BOOKED_STATUSES).stream()
                 .anyMatch(r -> !r.getRentalStart().isAfter(requestedEnd)
                         && !r.getRentalEnd().plusDays(AVAILABILITY_BUFFER_DAYS_AFTER_END).isBefore(requestedStart));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<BlockedDateRangeResponse> getBlockedDateRanges(UUID productId) {
+        return rentalRepository.findByProduct_IdAndStatusIn(productId, BOOKED_STATUSES).stream()
+                .map(r -> BlockedDateRangeResponse.builder()
+                        .start(r.getRentalStart())
+                        .end(r.getRentalEnd().plusDays(AVAILABILITY_BUFFER_DAYS_AFTER_END))
+                        .build())
+                .toList();
     }
 }

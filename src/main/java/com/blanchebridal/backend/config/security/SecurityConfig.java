@@ -50,7 +50,8 @@ public class SecurityConfig {
                                 "/api/products/**",
                                 "/api/categories/**",
                                 "/api/appointments/slots",
-                                "/api/gallery/**"
+                                "/api/gallery/**",
+                                "/api/rentals/blocked-dates"
                         ).permitAll()
                         .requestMatchers(
                                 org.springframework.http.HttpMethod.POST,
