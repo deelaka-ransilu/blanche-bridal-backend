@@ -1,5 +1,6 @@
 package com.blanchebridal.backend.payment.dto.res;
 
+import com.blanchebridal.backend.payment.entity.ReceiptType;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -16,6 +17,8 @@ public class ReceiptResponse {
     private String receiptNumber;
     private String pdfUrl;
     private LocalDateTime issuedAt;
-    private UUID orderId;
+    private UUID orderId;      // null for REFUND receipts
+    private UUID rentalId;     // null for PAYMENT receipts
+    private ReceiptType type;
     private BigDecimal totalAmount;
 }

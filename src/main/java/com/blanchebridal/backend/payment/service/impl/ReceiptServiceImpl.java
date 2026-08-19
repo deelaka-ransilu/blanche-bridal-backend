@@ -7,8 +7,10 @@ import com.blanchebridal.backend.order.entity.OrderItem;
 import com.blanchebridal.backend.payment.dto.res.ReceiptResponse;
 import com.blanchebridal.backend.payment.entity.Payment;
 import com.blanchebridal.backend.payment.entity.Receipt;
+import com.blanchebridal.backend.payment.entity.ReceiptType;
 import com.blanchebridal.backend.payment.repository.ReceiptRepository;
 import com.blanchebridal.backend.payment.service.ReceiptService;
+import com.blanchebridal.backend.rental.entity.Rental;
 import com.itextpdf.io.font.constants.StandardFonts;
 import com.itextpdf.kernel.colors.ColorConstants;
 import com.itextpdf.kernel.colors.DeviceRgb;
@@ -151,6 +153,49 @@ public class ReceiptServiceImpl implements ReceiptService {
         return toResponse(receipt);
     }
 
+    @Override
+    @Transactional
+    public Receipt generateRentalRefundReceipt(com.blanchebridal.backend.rental.entity.Rental rental) {
+        return receiptRepository.findByRental_Id(rental.getId())
+                .orElseGet(() -> {
+                    try {
+                        String receiptNumber = buildNextReceiptNumber();
+                        byte[] pdfBytes = buildRefundPdf(rental, receiptNumber);
+
+                        Receipt receipt = Receipt.builder()
+                                .rental(rental)
+                                .type(ReceiptType.REFUND)
+                                .receiptNumber(receiptNumber)
+                                .pdfData(pdfBytes)
+                                .build();
+
+                        return receiptRepository.save(receipt);
+                    } catch (Exception e) {
+                        log.error("Refund receipt generation failed for rental {}: {}",
+                                rental.getId(), e.getMessage(), e);
+                        throw new RuntimeException("Refund receipt generation failed", e);
+                    }
+                });
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ReceiptResponse getReceiptByRentalId(UUID rentalId, UUID requestingUserId, String role) {
+        Receipt receipt = receiptRepository.findByRental_Id(rentalId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "No receipt found for rental: " + rentalId));
+
+        boolean isAdminOrEmployee = "ADMIN".equals(role) || "EMPLOYEE".equals(role);
+        if (!isAdminOrEmployee) {
+            UUID ownerUserId = receipt.getRental().getUser().getId();
+            if (!ownerUserId.equals(requestingUserId)) {
+                throw new UnauthorizedException("Access denied to this receipt");
+            }
+        }
+
+        return toResponse(receipt);
+    }
+
     // ─── Shared ownership check ─────────────────────────────────────────────
 
     private Receipt getAuthorizedReceipt(UUID receiptId, UUID requestingUserId, String role) {
@@ -158,11 +203,12 @@ public class ReceiptServiceImpl implements ReceiptService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Receipt not found: " + receiptId));
 
-        boolean isAdminOrEmployee =
-                "ADMIN".equals(role) || "EMPLOYEE".equals(role);
+        boolean isAdminOrEmployee = "ADMIN".equals(role) || "EMPLOYEE".equals(role);
 
         if (!isAdminOrEmployee) {
-            UUID ownerUserId = receipt.getOrder().getUser().getId();
+            UUID ownerUserId = receipt.getType() == ReceiptType.REFUND
+                    ? receipt.getRental().getUser().getId()
+                    : receipt.getOrder().getUser().getId();
             if (!ownerUserId.equals(requestingUserId)) {
                 throw new UnauthorizedException("Access denied to this receipt");
             }
@@ -374,8 +420,109 @@ public class ReceiptServiceImpl implements ReceiptService {
                 .receiptNumber(r.getReceiptNumber())
                 .pdfUrl(r.getPdfUrl())
                 .issuedAt(r.getIssuedAt())
-                .orderId(r.getOrder().getId())
-                .totalAmount(r.getOrder().getTotalAmount())
+                .type(r.getType())
+                .orderId(r.getOrder() != null ? r.getOrder().getId() : null)
+                .rentalId(r.getRental() != null ? r.getRental().getId() : null)
+                .totalAmount(r.getOrder() != null ? r.getOrder().getTotalAmount() : null)
                 .build();
+    }
+
+    private byte[] buildRefundPdf(com.blanchebridal.backend.rental.entity.Rental rental,
+                                  String receiptNumber) throws IOException {
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PdfWriter   writer  = new PdfWriter(baos);
+        PdfDocument pdfDoc  = new PdfDocument(writer);
+        Document    document = new Document(pdfDoc);
+
+        PdfFont bold    = PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD);
+        PdfFont regular = PdfFontFactory.createFont(StandardFonts.HELVETICA);
+
+        document.add(new Paragraph("Blanche Bridal")
+                .setFont(bold).setFontSize(24).setFontColor(PRIMARY)
+                .setTextAlignment(TextAlignment.CENTER).setMarginBottom(4));
+
+        document.add(new com.itextpdf.layout.element.Div()
+                .setHeight(2).setWidth(UnitValue.createPercentValue(100))
+                .setBackgroundColor(PRIMARY).setMarginBottom(18));
+
+        document.add(metaLine("Receipt No:", receiptNumber, bold, regular));
+        document.add(metaLine("Issue Date:", LocalDateTime.now().format(DATE_FMT), bold, regular));
+        document.add(metaLine("Rental ID:",
+                rental.getId().toString().substring(0, 8).toUpperCase(), bold, regular));
+        document.add(metaLine("Return Date:",
+                rental.getReturnDate() != null
+                        ? rental.getReturnDate().format(DateTimeFormatter.ofPattern("dd MMM yyyy"))
+                        : "—", bold, regular));
+
+        document.add(new Paragraph("\nCustomer Details")
+                .setFont(bold).setFontSize(12).setMarginTop(10));
+
+        String fullName = ((rental.getUser().getFirstName() != null
+                ? rental.getUser().getFirstName() : "") + " "
+                + (rental.getUser().getLastName() != null
+                ? rental.getUser().getLastName() : "")).trim();
+
+        document.add(metaLine("Name:", fullName.isEmpty() ? "—" : fullName, bold, regular));
+        document.add(metaLine("Email:", rental.getUser().getEmail(), bold, regular));
+        document.add(metaLine("Item:",
+                rental.getProduct() != null ? rental.getProduct().getName() : "—", bold, regular));
+
+        document.add(new Paragraph("\nDeposit Settlement")
+                .setFont(bold).setFontSize(12).setMarginTop(10));
+
+        Table table = new Table(UnitValue.createPercentArray(new float[]{65, 35}))
+                .setWidth(UnitValue.createPercentValue(100));
+
+        addSettlementRow(table, "Dress value held", rental.getDressValue(), bold, regular, false);
+        addSettlementRow(table, "Rental fee (shop's fee)", rental.getRentalFee(), bold, regular, true);
+        if (rental.getDamageCost() != null && rental.getDamageCost().signum() > 0) {
+            addSettlementRow(table, "Damage cost", rental.getDamageCost(), bold, regular, true);
+        }
+        if (rental.getLateFeeAmount() != null && rental.getLateFeeAmount().signum() > 0) {
+            addSettlementRow(table, "Late return fee", rental.getLateFeeAmount(), bold, regular, true);
+        }
+
+        boolean owed = rental.getAmountOwedByCustomer() != null
+                && rental.getAmountOwedByCustomer().signum() > 0;
+
+        String resultLabel = owed ? "AMOUNT OWED BY CUSTOMER" : "SECURITY DEPOSIT REFUNDED";
+        BigDecimal resultAmount = owed ? rental.getAmountOwedByCustomer() : rental.getRefundAmount();
+        DeviceRgb resultColor = owed ? STATUS_CANCELLED : STATUS_COMPLETED;
+
+        table.addCell(new Cell()
+                .add(new Paragraph(resultLabel).setFont(bold).setFontSize(11))
+                .setBackgroundColor(PRIMARY_LIGHT).setBorderTop(null).setPadding(8));
+        table.addCell(new Cell()
+                .add(new Paragraph(formatAmount(resultAmount != null ? resultAmount : BigDecimal.ZERO))
+                        .setFont(bold).setFontSize(11).setFontColor(resultColor))
+                .setBackgroundColor(PRIMARY_LIGHT).setPadding(8).setTextAlignment(TextAlignment.RIGHT));
+
+        document.add(table);
+
+        document.add(new com.itextpdf.layout.element.Div()
+                .setHeight(1).setWidth(UnitValue.createPercentValue(100))
+                .setBackgroundColor(BORDER).setMarginTop(28).setMarginBottom(14));
+
+        document.add(new Paragraph(owed
+                ? "Please contact us to settle the remaining balance at your earliest convenience."
+                : "Thank you for choosing Blanche Bridal. We look forward to being part of your special day.")
+                .setFont(regular).setFontSize(10).setTextAlignment(TextAlignment.CENTER)
+                .setFontColor(MUTED_FOREGROUND));
+
+        document.close();
+        return baos.toByteArray();
+    }
+
+    private void addSettlementRow(Table table, String label, BigDecimal amount,
+                                  PdfFont bold, PdfFont regular, boolean isDeduction) {
+        BigDecimal value = amount != null ? amount : BigDecimal.ZERO;
+        table.addCell(new Cell()
+                .add(new Paragraph(label).setFont(regular).setFontSize(10))
+                .setPadding(6));
+        table.addCell(new Cell()
+                .add(new Paragraph((isDeduction ? "− " : "") + formatAmount(value))
+                        .setFont(regular).setFontSize(10))
+                .setPadding(6).setTextAlignment(TextAlignment.RIGHT));
     }
 }

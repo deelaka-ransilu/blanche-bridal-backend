@@ -8,6 +8,7 @@ import com.blanchebridal.backend.exception.ConflictException;
 import com.blanchebridal.backend.order.dto.res.OrderItemResponse;
 import com.blanchebridal.backend.order.dto.res.OrderResponse;
 import com.blanchebridal.backend.order.repository.OrderRepository;
+import com.blanchebridal.backend.payment.service.ReceiptService;
 import com.blanchebridal.backend.product.entity.ProductType;
 import com.blanchebridal.backend.rental.dto.req.*;
 import com.blanchebridal.backend.rental.dto.res.BlockedDateRangeResponse;
@@ -78,6 +79,8 @@ public class RentalServiceImpl implements RentalService {
     private final OrderRepository orderRepository;
     private final EmailService emailService;
     private final AppointmentRepository appointmentRepository;
+
+    private final ReceiptService receiptService;
 
     @Override
     @Transactional
@@ -389,6 +392,8 @@ public class RentalServiceImpl implements RentalService {
                 owedAmount);
 
         Rental saved = rentalRepository.save(rental);
+
+        receiptService.generateRentalRefundReceipt(saved);
 
         try {
             User customer = rental.getUser();

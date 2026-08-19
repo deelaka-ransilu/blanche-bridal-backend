@@ -104,4 +104,16 @@ public class ReceiptController {
         ReceiptResponse receipt = receiptService.getReceiptByOrderId(orderId, requestingUserId, role);
         return ResponseEntity.ok(Map.of("success", true, "data", receipt));
     }
+
+    @GetMapping("/by-rental/{rentalId}")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'ADMIN', 'EMPLOYEE')")
+    public ResponseEntity<Map<String, Object>> getReceiptByRentalId(
+            @PathVariable UUID rentalId,
+            @AuthenticationPrincipal User user) {
+
+        UUID requestingUserId = user.getId();
+        String role = user.getRole().name();
+        ReceiptResponse receipt = receiptService.getReceiptByRentalId(rentalId, requestingUserId, role);
+        return ResponseEntity.ok(Map.of("success", true, "data", receipt));
+    }
 }

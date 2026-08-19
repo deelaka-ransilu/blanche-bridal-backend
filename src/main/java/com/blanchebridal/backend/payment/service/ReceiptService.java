@@ -26,4 +26,7 @@ public interface ReceiptService {
 
     String getReceiptFilename(UUID receiptId, UUID requestingUserId, String role);
     ReceiptResponse getReceiptByOrderId(UUID orderId, UUID requestingUserId, String role);
+
+    Receipt generateRentalRefundReceipt(com.blanchebridal.backend.rental.entity.Rental rental);
+    ReceiptResponse getReceiptByRentalId(UUID rentalId, UUID requestingUserId, String role);
 }

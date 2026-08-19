@@ -24,4 +24,7 @@ public interface ReceiptRepository extends JpaRepository<Receipt, UUID> {
 
     @Query("SELECT r.receiptNumber FROM Receipt r ORDER BY r.issuedAt DESC LIMIT 1")
     Optional<String> findLatestReceiptNumber();
+
+    @EntityGraph(attributePaths = {"rental", "rental.user", "rental.product"})
+    Optional<Receipt> findByRental_Id(UUID rentalId);
 }

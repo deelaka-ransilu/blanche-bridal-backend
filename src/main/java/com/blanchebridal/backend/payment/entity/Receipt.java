@@ -22,12 +22,16 @@ public class Receipt {
     private UUID id;
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_id", nullable = false)
+    @JoinColumn(name = "order_id")
     private Order order;
 
     @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "payment_id", nullable = false)
+    @JoinColumn(name = "payment_id")
     private Payment payment;
+
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "rental_id")
+    private com.blanchebridal.backend.rental.entity.Rental rental;
 
     @Column(name = "receipt_number", unique = true, nullable = false, length = 50)
     private String receiptNumber;
@@ -42,6 +46,11 @@ public class Receipt {
 
     @Column(name = "pdf_url", length = 500)
     private String pdfUrl;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "receipt_type", nullable = false, length = 20)
+    @Builder.Default
+    private ReceiptType type = ReceiptType.PAYMENT;
 
     @CreationTimestamp
     @Column(name = "issued_at", updatable = false)
