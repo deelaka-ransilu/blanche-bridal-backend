@@ -164,7 +164,8 @@ public class AdminServiceImpl implements AdminService {
         if (userRepository.existsByEmailAndStatusNot(request.email(), UserStatus.INACTIVE)) {
             throw new ConflictException("A customer with this email already exists");
         }
-        if (userRepository.existsByPhoneAndStatusNot(request.phone(), UserStatus.INACTIVE)) {
+        if (request.phone() != null && !request.phone().isBlank()
+                && userRepository.existsByPhoneAndStatusNot(request.phone(), UserStatus.INACTIVE)) {
             throw new ConflictException("A customer with this phone number already exists");
         }
         User user = User.builder()

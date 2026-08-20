@@ -50,9 +50,7 @@ public class ReceiptServiceImpl implements ReceiptService {
     private static final DateTimeFormatter DATE_FMT =
             DateTimeFormatter.ofPattern("dd MMM yyyy, HH:mm");
 
-    // ─── Brand colors ────────────────────────────────────────────────────────
-    // Mirrors the light-theme palette in globals.css so the PDF feels
-    // consistent with the rest of the site rather than using arbitrary colors.
+    // ─── Brand colors
     private static final DeviceRgb PRIMARY          = new DeviceRgb(0xD2, 0x33, 0x5E); // --primary
     private static final DeviceRgb PRIMARY_LIGHT     = new DeviceRgb(0xFB, 0xEC, 0xF1); // tint of --primary for backgrounds
     private static final DeviceRgb MUTED_FOREGROUND  = new DeviceRgb(0x6B, 0x6B, 0x6B); // --muted-foreground

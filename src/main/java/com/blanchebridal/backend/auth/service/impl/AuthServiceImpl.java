@@ -1,3 +1,4 @@
+
 package com.blanchebridal.backend.auth.service.impl;
 
 import com.blanchebridal.backend.auth.security.JwtUtil;
@@ -63,7 +64,8 @@ public class AuthServiceImpl implements AuthService {
         if (userRepository.existsByEmailAndStatusNot(request.email(), UserStatus.INACTIVE)) {
             throw new ConflictException("Email already in use");
         }
-        if (userRepository.existsByPhoneAndStatusNot(request.phone(), UserStatus.INACTIVE)) {
+        if (request.phone() != null && !request.phone().isBlank()
+                && userRepository.existsByPhoneAndStatusNot(request.phone(), UserStatus.INACTIVE)) {
             throw new ConflictException("Phone number already in use");
         }
 
@@ -146,7 +148,7 @@ public class AuthServiceImpl implements AuthService {
                             .googleId(googleId)
                             .firstName(firstName != null ? firstName : "")
                             .lastName(lastName   != null ? lastName  : "")
-                            .phone("google_" + googleId)
+                            .phone(null)
                             .role(UserRole.CUSTOMER)
                             .build())
             );

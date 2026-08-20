@@ -51,17 +51,6 @@ public class ReportServiceImpl implements ReportService {
         return to != null ? to : LocalDate.now();
     }
 
-    /**
-     * Revenue-counted orders = plain buy-flow orders that reached
-     * OrderStatus.COMPLETED, PLUS rental and custom-design orders (each a
-     * synthetic Order row) as soon as payment clears — which for those two
-     * types means OrderStatus.CONFIRMED, since neither ever progresses past
-     * CONFIRMED in its own lifecycle (confirmed by grepping every
-     * order.setStatus(OrderStatus...) call site — the only other transition
-     * either type undergoes is CANCELLED). A rental with two payments
-     * (booking + handover) contributes two separate Order rows here, which
-     * is correct — each is its own confirmed payment.
-     */
     private List<Order> getRevenueCountedOrders(LocalDateTime start, LocalDateTime end) {
         List<Order> completedBuyOrders = orderRepository.findByStatusAndCreatedAtBetween(
                 OrderStatus.COMPLETED, start, end);
